@@ -31,6 +31,8 @@ dependencies {
 	implementation 'org.projectlombok:lombok'
 	// logback json 형태 설정 추가
 	implementation 'net.logstash.logback:logstash-logback-encoder:6.1'
+	// Springdoc OpenAPI core + Swagger UI
+	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
 }
 
 tasks.named('test') {
