@@ -29,6 +29,7 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-web'
 	// lombok
 	implementation 'org.projectlombok:lombok'
+	annotationProcessor 'org.projectlombok:lombok'
 	// logback json 형태 설정 추가
 	implementation 'net.logstash.logback:logstash-logback-encoder:6.1'
 	// Springdoc OpenAPI core + Swagger UI
