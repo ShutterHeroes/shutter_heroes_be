@@ -22,6 +22,15 @@ dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter'
 	testImplementation 'org.springframework.boot:spring-boot-starter-test'
 	testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+
+	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
+	implementation 'org.springframework.boot:spring-boot-starter-security'
+	implementation 'org.springframework.boot:spring-boot-starter-validation'
+	implementation 'org.springframework.boot:spring-boot-starter-web'
+	// lombok
+	implementation 'org.projectlombok:lombok'
+	// logback json 형태 설정 추가
+	implementation 'net.logstash.logback:logstash-logback-encoder:6.1'
 }
 
 tasks.named('test') {
