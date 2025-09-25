@@ -8,6 +8,7 @@ import org.springframework.http.HttpMethod;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -43,13 +44,14 @@ public class SecurityConfiguration {
             .securityMatcher("/**")
             .csrf(AbstractHttpConfigurer::disable)
             .formLogin(AbstractHttpConfigurer::disable)
+            .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin)) // H2 콘솔을 위한 iframe 허용
             .authorizeHttpRequests(auth -> {
                     auth.requestMatchers(HttpMethod.GET, "/").permitAll();
+                    auth.requestMatchers("/h2-console/**").permitAll(); // H2 콘솔 모든 리소스 허용
 
                     // Swagger UI 경로 허용 (기본 생성 문서)
                     auth.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**", "/favicon.ico").permitAll();
 
-                    auth.requestMatchers(HttpMethod.GET, "/api/users/me").permitAll();
                     auth.anyRequest().authenticated();
                 }
             )

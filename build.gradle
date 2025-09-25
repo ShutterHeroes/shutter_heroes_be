@@ -34,6 +34,8 @@ dependencies {
 	implementation 'net.logstash.logback:logstash-logback-encoder:6.1'
 	// Springdoc OpenAPI core + Swagger UI
 	implementation 'org.springdoc:springdoc-openapi-starter-webmvc-ui:2.7.0'
+	// h2 database 임시 추가
+	runtimeOnly 'com.h2database:h2'
 }
 
 tasks.named('test') {
