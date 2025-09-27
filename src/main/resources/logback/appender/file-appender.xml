@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<included>
+    <!-- 애플리케이션 로그 파일 appender -->
+    <appender name="file-info" class="ch.qos.logback.core.rolling.RollingFileAppender">
+<!--        <file>/var/log/app/info/info.log</file> // Linux용-->
+        <file>apps/sh-back/build/logs/info.log</file>  <!-- Windows용 -->
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <timeZone>Asia/Seoul</timeZone>
+        </encoder>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+<!--            <fileNamePattern>/var/log/app/info/info.%d{yyyy-MM-dd}-%i.log</fileNamePattern> // Linux용-->
+            <fileNamePattern>apps/sh-back/build/logs/info.%d{yyyy-MM-dd}-%i.log</fileNamePattern>  <!-- Windows용 -->
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>15</maxHistory>
+            <totalSizeCap>2GB</totalSizeCap>
+        </rollingPolicy>
+    </appender>
+</included>
