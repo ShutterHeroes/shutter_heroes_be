@@ -1,5 +1,9 @@
 package com.example.demo.config.security;
 
+import com.example.demo.config.security.jwt.JwtAuthenticationFilter;
+import com.example.demo.config.security.oauth2.CustomOAuth2UserService;
+import com.example.demo.config.security.oauth2.handler.OAuth2FailureHandler;
+import com.example.demo.config.security.oauth2.handler.OAuth2SuccessHandler;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -13,6 +17,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
@@ -24,7 +29,12 @@ import org.springframework.web.filter.CorsFilter;
 @Configuration
 @EnableWebSecurity
 public class SecurityConfiguration {
+    private final OAuth2SuccessHandler oAuth2SuccessHandler;
+    private final OAuth2FailureHandler oAuth2FailureHandler;
+    private final CustomOAuth2UserService customOAuth2UserService;
+    private final JwtAuthenticationFilter jwtAuthenticationFilter;
     private final ExceptionHandlerFilter exceptionHandlerFilter;
+    private final JwtAuthenticationEntryPoint jwtAuthenticationEntryPoint;
 
     @Bean
     @Order(1)
@@ -47,18 +57,29 @@ public class SecurityConfiguration {
             .headers(headers -> headers.frameOptions(HeadersConfigurer.FrameOptionsConfig::sameOrigin)) // H2 콘솔을 위한 iframe 허용
             .authorizeHttpRequests(auth -> {
                     auth.requestMatchers(HttpMethod.GET, "/").permitAll();
-                    auth.requestMatchers("/h2-console/**").permitAll(); // H2 콘솔 모든 리소스 허용
+                    auth.requestMatchers(HttpMethod.GET, "/login").permitAll();
+                    auth.requestMatchers(HttpMethod.GET, "/oauth2/authorization/kakao").permitAll();
+                    auth.requestMatchers(HttpMethod.GET, "/login/oauth2/code/kakao").permitAll();
 
-                    // Swagger UI 경로 허용 (기본 생성 문서)
+                // Swagger UI 경로 허용 (기본 생성 문서)
                     auth.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**", "/favicon.ico").permitAll();
 
-                    auth.anyRequest().authenticated();
+                    auth.anyRequest().permitAll();
                 }
             )
             .sessionManagement((sessionManagement) ->
                 sessionManagement.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED)
             )
+            .oauth2Login(customConfig -> customConfig
+                .successHandler(oAuth2SuccessHandler)
+                .failureHandler(oAuth2FailureHandler)
+                .userInfoEndpoint(endPointConfig -> endPointConfig.userService(customOAuth2UserService))
+            )
+            .exceptionHandling(exceptionHandling ->
+                exceptionHandling.authenticationEntryPoint(jwtAuthenticationEntryPoint)
+            )
             .addFilterBefore(corsFilter(), SecurityContextHolderFilter.class)
+            .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class)
             .addFilterBefore(exceptionHandlerFilter, CorsFilter.class);
 
         return http.build();
