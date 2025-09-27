@@ -1,5 +1,6 @@
-package com.example.demo.exceptions;
+package com.example.demo.exceptions.exception;
 
+import com.example.demo.exceptions.errorcode.ErrorCode;
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 
