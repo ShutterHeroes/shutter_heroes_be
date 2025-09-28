@@ -2,7 +2,9 @@ package com.example.demo.domain.web;
 
 import com.example.demo.domain.dto.request.UserRegisterRequest;
 import com.example.demo.domain.dto.response.UserRegisterResponse;
+import com.example.demo.domain.dto.response.UserEmailExistsResponse;
 import com.example.demo.domain.service.UserRegisterService;
+import com.example.demo.domain.service.UserSearchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
@@ -22,6 +24,7 @@ import org.springframework.web.bind.annotation.*;
 public class UserController {
 
     private final UserRegisterService userRegisterService;
+    private final UserSearchService userSearchService;
 
     @PostMapping("/register")
     @Operation(summary = "회원가입", description = "이메일과 비밀번호를 사용한 회원가입")
@@ -35,5 +38,19 @@ public class UserController {
     ) {
         UserRegisterResponse response = userRegisterService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @GetMapping("/exists")
+    @Operation(summary = "이메일 존재 확인", description = "해당 이메일로 가입된 사용자가 있는지 확인")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "이메일 존재 여부 확인 성공"),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청 (이메일 파라미터 누락)")
+    })
+    public ResponseEntity<UserEmailExistsResponse> checkEmailExists(
+        @RequestParam String email
+    ) {
+        boolean exists = userSearchService.existsByEmail(email);
+        UserEmailExistsResponse response = UserEmailExistsResponse.of(exists);
+        return ResponseEntity.ok(response);
     }
 }
