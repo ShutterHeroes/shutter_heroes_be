@@ -11,6 +11,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Optional;
+import java.util.UUID;
 
 @RequiredArgsConstructor
 @Transactional(readOnly = true)
@@ -52,5 +53,17 @@ public class UserSearchService {
      */
     public Page<User> findAllUsers(Pageable pageable, String search) {
         return userRepository.findAllWithSearch(search, pageable);
+    }
+
+    /**
+     * 사용자 ID로 사용자 조회
+     *
+     * @param userId 사용자 ID
+     * @return 조회된 사용자
+     * @throws UserException 사용자가 존재하지 않을 경우
+     */
+    public User findById(UUID userId) {
+        return userRepository.findById(userId)
+            .orElseThrow(() -> new UserException(UserErrorCode.NOT_EXIST));
     }
 }

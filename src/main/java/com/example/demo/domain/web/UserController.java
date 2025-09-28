@@ -7,6 +7,7 @@ import com.example.demo.domain.dto.response.UserLoginResponse;
 import com.example.demo.domain.dto.response.UserEmailExistsResponse;
 import com.example.demo.domain.dto.response.UserProfileResponse;
 import com.example.demo.domain.dto.response.UserListResponse;
+import com.example.demo.domain.dto.response.UserPublicInfoResponse;
 import com.example.demo.domain.entity.User;
 import com.example.demo.domain.service.UserRegisterService;
 import com.example.demo.domain.service.UserService;
@@ -28,6 +29,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
+
+import java.util.UUID;
 
 @Slf4j
 @RestController
@@ -114,6 +117,20 @@ public class UserController {
 
         // 응답 생성
         UserListResponse response = UserListResponse.from(userPage);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/{userId}")
+    @Operation(summary = "특정 사용자 프로필 조회", description = "사용자 ID로 해당 사용자의 공개 프로필 정보를 조회 (인증 불필요)")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "사용자 프로필 조회 성공"),
+        @ApiResponse(responseCode = "404", description = "사용자를 찾을 수 없음")
+    })
+    public ResponseEntity<UserPublicInfoResponse> getUserProfile(
+        @PathVariable UUID userId
+    ) {
+        User user = userSearchService.findById(userId);
+        UserPublicInfoResponse response = UserPublicInfoResponse.from(user);
         return ResponseEntity.ok(response);
     }
 }
