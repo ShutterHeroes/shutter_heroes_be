@@ -2,12 +2,14 @@ package com.example.demo.domain.web;
 
 import com.example.demo.domain.dto.request.UserRegisterRequest;
 import com.example.demo.domain.dto.request.UserLoginRequest;
+import com.example.demo.domain.dto.request.UserUpdateRequest;
 import com.example.demo.domain.dto.response.UserRegisterResponse;
 import com.example.demo.domain.dto.response.UserLoginResponse;
 import com.example.demo.domain.dto.response.UserEmailExistsResponse;
 import com.example.demo.domain.dto.response.UserProfileResponse;
 import com.example.demo.domain.dto.response.UserListResponse;
 import com.example.demo.domain.dto.response.UserPublicInfoResponse;
+import com.example.demo.domain.dto.response.UserUpdateResponse;
 import com.example.demo.domain.entity.User;
 import com.example.demo.domain.service.UserRegisterService;
 import com.example.demo.domain.service.UserService;
@@ -99,6 +101,23 @@ public class UserController {
         String email = userDetails.getUsername();
         User user = userSearchService.findByEmail(email);
         UserProfileResponse response = UserProfileResponse.from(user);
+        return ResponseEntity.ok(response);
+    }
+
+    @PutMapping("/me")
+    @Operation(summary = "나의 정보 수정", description = "로그인한 사용자의 프로필 정보 수정 (displayName, avatarUrl만 수정 가능)")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "프로필 수정 성공"),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청 (유효성 검증 실패)"),
+        @ApiResponse(responseCode = "401", description = "인증 실패 (JWT 토큰 없음 또는 유효하지 않음)")
+    })
+    public ResponseEntity<UserUpdateResponse> updateMyProfile(
+        @AuthenticationPrincipal UserDetails userDetails,
+        @Valid @RequestBody UserUpdateRequest request
+    ) {
+        String email = userDetails.getUsername();
+        User updatedUser = userService.updateUser(email, request);
+        UserUpdateResponse response = UserUpdateResponse.from(updatedUser);
         return ResponseEntity.ok(response);
     }
 

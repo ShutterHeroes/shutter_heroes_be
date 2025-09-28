@@ -2,6 +2,7 @@ package com.example.demo.domain.entity;
 
 import com.example.demo.domain.converter.UserRoleConverter;
 import com.example.demo.domain.dto.request.UserRegisterRequest;
+import com.example.demo.domain.dto.request.UserUpdateRequest;
 import com.example.demo.domain.enums.LoginPlatform;
 import com.example.demo.domain.enums.UserRole;
 import jakarta.persistence.*;
@@ -9,7 +10,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import lombok.Setter;
 import org.hibernate.annotations.ColumnTransformer;
 import org.hibernate.annotations.UuidGenerator;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -21,7 +21,6 @@ import java.util.UUID;
 @Entity
 @Table(name = "users")
 @Getter
-@Setter
 @Builder
 @NoArgsConstructor
 @AllArgsConstructor
@@ -111,5 +110,25 @@ public class User {
             .avatarUrl(request.getAvatarUrl())
             .role(UserRole.USER)
             .build();
+    }
+
+    /**
+     * 사용자 정보 업데이트
+     *
+     * @param request 업데이트 요청 DTO
+     */
+    public void update(UserUpdateRequest request) {
+        // displayName 업데이트
+        if (StringUtils.hasText(request.getDisplayName())) {
+            this.displayName = request.getDisplayName();
+        }
+
+        // avatarUrl 업데이트
+        if (request.getAvatarUrl() != null) {
+            this.avatarUrl = request.getAvatarUrl();
+        }
+
+        // updatedAt 업데이트
+        this.updatedAt = LocalDateTime.now();
     }
 }

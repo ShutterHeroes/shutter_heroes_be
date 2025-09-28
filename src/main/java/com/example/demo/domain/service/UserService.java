@@ -2,9 +2,11 @@ package com.example.demo.domain.service;
 
 import com.example.demo.config.security.jwt.JwtUtil;
 import com.example.demo.domain.dto.request.UserLoginRequest;
+import com.example.demo.domain.dto.request.UserUpdateRequest;
 import com.example.demo.domain.entity.User;
 import com.example.demo.domain.enums.JwtRule;
 import com.example.demo.domain.enums.JwtType;
+import com.example.demo.domain.repository.UserRepository;
 import com.example.demo.exceptions.errorcode.AuthErrorCode;
 import com.example.demo.exceptions.exception.AuthException;
 import jakarta.servlet.http.Cookie;
@@ -15,6 +17,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.util.StringUtils;
 
 import java.util.UUID;
 
@@ -25,6 +28,7 @@ import java.util.UUID;
 public class UserService {
 
     private final UserSearchService userSearchService;
+    private final UserRepository userRepository;
     private final PasswordEncoder passwordEncoder;
     private final JwtUtil jwtUtil;
 
@@ -54,6 +58,20 @@ public class UserService {
         log.info("User login successful: email={}", user.getEmail());
 
         return user;
+    }
+
+    @Transactional
+    public User updateUser(String email, UserUpdateRequest request) {
+        // 이메일로 사용자 찾기
+        User user = userSearchService.findByEmail(email);
+        user.update(request);
+
+        // 변경사항 저장
+        User updatedUser = userRepository.save(user);
+
+        log.info("User profile updated successfully: email={}", email);
+
+        return updatedUser;
     }
 
     private void addTokenCookie(HttpServletResponse response, String name, String value, int maxAge) {
