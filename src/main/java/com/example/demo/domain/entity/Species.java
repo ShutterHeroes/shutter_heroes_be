@@ -11,7 +11,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "species", schema = "app")
+@Table(name = "species")
 @Getter
 @Setter
 @NoArgsConstructor

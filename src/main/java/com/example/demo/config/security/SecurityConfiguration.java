@@ -14,8 +14,6 @@ import org.springframework.security.config.annotation.web.configuration.EnableWe
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.annotation.web.configurers.HeadersConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
-import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
-import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.security.web.context.SecurityContextHolderFilter;
@@ -61,10 +59,15 @@ public class SecurityConfiguration {
                     auth.requestMatchers(HttpMethod.GET, "/oauth2/authorization/kakao").permitAll();
                     auth.requestMatchers(HttpMethod.GET, "/login/oauth2/code/kakao").permitAll();
 
+                    // 유저 관련 API
+                    auth.requestMatchers(HttpMethod.POST, "/api/v1/users/register").permitAll();
+                    auth.requestMatchers(HttpMethod.POST, "/api/v1/users/login").permitAll();
+                    auth.requestMatchers(HttpMethod.GET, "/api/v1/users/exists").permitAll();
+
                 // Swagger UI 경로 허용 (기본 생성 문서)
                     auth.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**", "/favicon.ico").permitAll();
 
-                    auth.anyRequest().permitAll();
+                    auth.anyRequest().authenticated();
                 }
             )
             .sessionManagement((sessionManagement) ->
@@ -102,11 +105,6 @@ public class SecurityConfiguration {
     @Bean
     public CorsFilter corsFilter() {
         return new CorsFilter(corsConfigurationSource());
-    }
-
-    @Bean
-    public PasswordEncoder passwordEncoder() {
-        return new BCryptPasswordEncoder();
     }
 
     /**
