@@ -5,6 +5,7 @@ import com.example.demo.domain.dto.request.UserLoginRequest;
 import com.example.demo.domain.dto.response.UserRegisterResponse;
 import com.example.demo.domain.dto.response.UserLoginResponse;
 import com.example.demo.domain.dto.response.UserEmailExistsResponse;
+import com.example.demo.domain.dto.response.UserProfileResponse;
 import com.example.demo.domain.entity.User;
 import com.example.demo.domain.service.UserRegisterService;
 import com.example.demo.domain.service.UserService;
@@ -19,6 +20,8 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 @Slf4j
@@ -73,6 +76,21 @@ public class UserController {
     ) {
         boolean exists = userSearchService.existsByEmail(email);
         UserEmailExistsResponse response = UserEmailExistsResponse.of(exists);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping("/me")
+    @Operation(summary = "나의 정보 조회", description = "로그인한 사용자의 프로필 정보 조회 (JWT 토큰 필요)")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "프로필 조회 성공"),
+        @ApiResponse(responseCode = "401", description = "인증 실패 (JWT 토큰 없음 또는 유효하지 않음)")
+    })
+    public ResponseEntity<UserProfileResponse> getMyProfile(
+        @AuthenticationPrincipal UserDetails userDetails
+    ) {
+        String email = userDetails.getUsername();
+        User user = userSearchService.findByEmail(email);
+        UserProfileResponse response = UserProfileResponse.from(user);
         return ResponseEntity.ok(response);
     }
 }
