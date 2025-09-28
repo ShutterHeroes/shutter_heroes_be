@@ -6,6 +6,7 @@ import com.example.demo.domain.dto.response.UserRegisterResponse;
 import com.example.demo.domain.dto.response.UserLoginResponse;
 import com.example.demo.domain.dto.response.UserEmailExistsResponse;
 import com.example.demo.domain.dto.response.UserProfileResponse;
+import com.example.demo.domain.dto.response.UserListResponse;
 import com.example.demo.domain.entity.User;
 import com.example.demo.domain.service.UserRegisterService;
 import com.example.demo.domain.service.UserService;
@@ -18,6 +19,10 @@ import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
+import org.springframework.data.web.PageableDefault;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -91,6 +96,24 @@ public class UserController {
         String email = userDetails.getUsername();
         User user = userSearchService.findByEmail(email);
         UserProfileResponse response = UserProfileResponse.from(user);
+        return ResponseEntity.ok(response);
+    }
+
+    @GetMapping
+    @Operation(summary = "사용자 목록 조회", description = "등록된 사용자들의 공개 정보 목록을 페이지네이션으로 조회. 검색어로 email 또는 displayName 검색 가능 (인증 불필요)")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "사용자 목록 조회 성공"),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청 (페이지 번호 또는 크기가 유효하지 않음)")
+    })
+    public ResponseEntity<UserListResponse> getUserList(
+        @PageableDefault(size = 10, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+        @RequestParam(required = false) String search
+    ) {
+        // 사용자 목록 조회 (검색어가 있으면 검색, 없으면 전체 조회)
+        Page<User> userPage = userSearchService.findAllUsers(pageable, search);
+
+        // 응답 생성
+        UserListResponse response = UserListResponse.from(userPage);
         return ResponseEntity.ok(response);
     }
 }

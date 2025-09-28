@@ -63,6 +63,7 @@ public class SecurityConfiguration {
                     auth.requestMatchers(HttpMethod.POST, "/api/v1/users/register").permitAll();
                     auth.requestMatchers(HttpMethod.POST, "/api/v1/users/login").permitAll();
                     auth.requestMatchers(HttpMethod.GET, "/api/v1/users/exists").permitAll();
+                    auth.requestMatchers(HttpMethod.GET, "/api/v1/users").permitAll();
                     auth.requestMatchers(HttpMethod.GET, "/api/v1/users/me").authenticated();
 
                 // Swagger UI 경로 허용 (기본 생성 문서)
