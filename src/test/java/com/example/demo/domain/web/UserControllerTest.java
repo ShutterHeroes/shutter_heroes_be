@@ -37,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Arrays;
 import java.util.List;
+import java.util.UUID;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
@@ -667,6 +668,75 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.users.length()").value(1));
 
             verify(userSearchService, times(1)).findAllUsers(any(Pageable.class), eq(""));
+        }
+    }
+
+    @Nested
+    @DisplayName("특정 사용자 프로필 조회 API")
+    @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+    class UserProfileTests {
+
+        private final String USER_PROFILE_URL = "/api/v1/users";
+
+        @BeforeEach
+        void setUp() {
+            reset(userSearchService);
+        }
+
+        // ========== 성공 케이스 ==========
+        @Test
+        @Order(1)
+        @DisplayName("성공 - 특정 사용자 프로필 조회")
+        void success_GetUserProfile() throws Exception {
+            // given
+            UUID userId = UUID.randomUUID();
+            User user = UserFixture.createUserWithEmailAndDisplayName("john@example.com", "John Doe");
+            when(userSearchService.findById(userId)).thenReturn(user);
+
+            // when & then
+            mockMvc.perform(get(USER_PROFILE_URL + "/{userId}", userId))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(user.getId().toString()))
+                .andExpect(jsonPath("$.displayName").value("John Doe"))
+                .andExpect(jsonPath("$.role").value("user"))
+                .andExpect(jsonPath("$.createdAt").exists())
+                .andExpect(jsonPath("$.email").doesNotExist())
+                .andExpect(jsonPath("$.lastLoginAt").doesNotExist());
+
+            verify(userSearchService, times(1)).findById(userId);
+        }
+
+        // ========== 실패 케이스 ==========
+        @Test
+        @Order(2)
+        @DisplayName("실패 - 존재하지 않는 사용자 ID로 조회")
+        void fail_GetUserProfileWithNonExistentUserId() throws Exception {
+            // given
+            UUID nonExistentUserId = UUID.randomUUID();
+            when(userSearchService.findById(nonExistentUserId))
+                .thenThrow(new UserException(UserErrorCode.NOT_EXIST));
+
+            // when & then
+            mockMvc.perform(get(USER_PROFILE_URL + "/{userId}", nonExistentUserId))
+                .andDo(print())
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("U_0001"))
+                .andExpect(jsonPath("$.errorMessage").value("존재하지 않는 유저입니다"));
+
+            verify(userSearchService, times(1)).findById(nonExistentUserId);
+        }
+
+        @Test
+        @Order(3)
+        @DisplayName("실패 - 잘못된 UUID 형식으로 조회")
+        void fail_GetUserProfileWithInvalidUUID() throws Exception {
+            // when & then
+            mockMvc.perform(get(USER_PROFILE_URL + "/{userId}", "invalid-uuid"))
+                .andDo(print())
+                .andExpect(status().isBadRequest());
+
+            verify(userSearchService, never()).findById(any(UUID.class));
         }
     }
 }
