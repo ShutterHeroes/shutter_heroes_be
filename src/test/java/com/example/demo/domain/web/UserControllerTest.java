@@ -24,13 +24,22 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.restdocs.AutoConfigureRestDocs;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.http.MediaType;
 import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Arrays;
+import java.util.List;
+
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -492,6 +501,172 @@ class UserControllerTest {
                 .andExpect(jsonPath("$.errorMessage").value("존재하지 않는 유저입니다"));
 
             verify(userSearchService, times(1)).findByEmail("nonexistent@example.com");
+        }
+    }
+
+    @Nested
+    @DisplayName("사용자 목록 조회 API")
+    @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+    class UserListTests {
+
+        private final String USER_LIST_URL = "/api/v1/users";
+
+        @BeforeEach
+        void setUp() {
+            reset(userSearchService);
+        }
+
+        // ========== 성공 케이스 ==========
+        @Test
+        @Order(1)
+        @DisplayName("성공 - 기본 페이지네이션으로 사용자 목록 조회")
+        void success_GetUserListWithDefaultPagination() throws Exception {
+            // given
+            List<User> users = Arrays.asList(
+                UserFixture.createDefaultUser(),
+                UserFixture.createDefaultUser(),
+                UserFixture.createDefaultUser()
+            );
+            Page<User> userPage = new PageImpl<>(users, PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt")), 3);
+            when(userSearchService.findAllUsers(any(Pageable.class), any())).thenReturn(userPage);
+
+            // when & then
+            mockMvc.perform(get(USER_LIST_URL))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.users").isArray())
+                .andExpect(jsonPath("$.users.length()").value(3))
+                .andExpect(jsonPath("$.currentPage").value(0))
+                .andExpect(jsonPath("$.totalPages").value(1))
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.size").value(10))
+                .andExpect(jsonPath("$.hasNext").value(false))
+                .andExpect(jsonPath("$.hasPrevious").value(false))
+                .andExpect(jsonPath("$.users[0].displayName").value("테스트유저"))
+                .andExpect(jsonPath("$.users[0].role").value("user"))
+                .andExpect(jsonPath("$.users[0].id").exists())
+                .andExpect(jsonPath("$.users[0].createdAt").exists())
+                .andExpect(jsonPath("$.users[0].email").doesNotExist())
+                .andExpect(jsonPath("$.users[0].lastLoginAt").doesNotExist());
+
+            verify(userSearchService, times(1)).findAllUsers(any(Pageable.class), any());
+        }
+
+        @Test
+        @Order(2)
+        @DisplayName("성공 - 커스텀 페이지네이션으로 사용자 목록 조회")
+        void success_GetUserListWithCustomPagination() throws Exception {
+            // given
+            List<User> users = Arrays.asList(
+                UserFixture.createDefaultUser(),
+                UserFixture.createDefaultUser()
+            );
+            Page<User> userPage = new PageImpl<>(users, PageRequest.of(1, 2, Sort.by(Sort.Direction.ASC, "displayName")), 5);
+            when(userSearchService.findAllUsers(any(Pageable.class), any())).thenReturn(userPage);
+
+            // when & then
+            mockMvc.perform(get(USER_LIST_URL)
+                    .param("page", "1")
+                    .param("size", "2")
+                    .param("sortBy", "displayName")
+                    .param("sortDirection", "asc"))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.users").isArray())
+                .andExpect(jsonPath("$.users.length()").value(2))
+                .andExpect(jsonPath("$.currentPage").value(1))
+                .andExpect(jsonPath("$.totalPages").value(3))
+                .andExpect(jsonPath("$.totalElements").value(5))
+                .andExpect(jsonPath("$.size").value(2))
+                .andExpect(jsonPath("$.hasNext").value(true))
+                .andExpect(jsonPath("$.hasPrevious").value(true));
+
+            verify(userSearchService, times(1)).findAllUsers(any(Pageable.class), any());
+        }
+
+        @Test
+        @Order(3)
+        @DisplayName("성공 - 빈 목록 조회")
+        void success_GetEmptyUserList() throws Exception {
+            // given
+            Page<User> emptyPage = new PageImpl<>(Arrays.asList(), PageRequest.of(0, 10), 0);
+            when(userSearchService.findAllUsers(any(Pageable.class), any())).thenReturn(emptyPage);
+
+            // when & then
+            mockMvc.perform(get(USER_LIST_URL))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.users").isArray())
+                .andExpect(jsonPath("$.users.length()").value(0))
+                .andExpect(jsonPath("$.currentPage").value(0))
+                .andExpect(jsonPath("$.totalPages").value(0))
+                .andExpect(jsonPath("$.totalElements").value(0));
+
+            verify(userSearchService, times(1)).findAllUsers(any(Pageable.class), any());
+        }
+
+        // ========== 실패 케이스 - 잘못된 파라미터 ==========
+        @Test
+        @Order(4)
+        @DisplayName("성공 - 잘못된 페이지 번호 (음수)는 0으로 처리")
+        void success_HandleNegativePageNumber() throws Exception {
+            // given
+            List<User> users = Arrays.asList(UserFixture.createDefaultUser());
+            Page<User> userPage = new PageImpl<>(users, PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt")), 1);
+            when(userSearchService.findAllUsers(any(Pageable.class), any())).thenReturn(userPage);
+
+            // when & then
+            mockMvc.perform(get(USER_LIST_URL)
+                    .param("page", "-1"))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentPage").value(0));
+
+            verify(userSearchService, times(1)).findAllUsers(any(Pageable.class), any());
+        }
+
+        @Test
+        @Order(5)
+        @DisplayName("성공 - 검색어로 사용자 목록 조회")
+        void success_GetUserListWithSearch() throws Exception {
+            // given
+            User user1 = UserFixture.createUserWithEmailAndDisplayName("john@example.com", "John Doe");
+            User user2 = UserFixture.createUserWithEmailAndDisplayName("jane@example.com", "Jane Smith");
+            List<User> searchResults = Arrays.asList(user1, user2);
+            Page<User> userPage = new PageImpl<>(searchResults, PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt")), 2);
+            when(userSearchService.findAllUsers(any(Pageable.class), eq("john"))).thenReturn(userPage);
+
+            // when & then
+            mockMvc.perform(get(USER_LIST_URL)
+                    .param("search", "john"))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.users").isArray())
+                .andExpect(jsonPath("$.users.length()").value(2))
+                .andExpect(jsonPath("$.currentPage").value(0))
+                .andExpect(jsonPath("$.totalElements").value(2));
+
+            verify(userSearchService, times(1)).findAllUsers(any(Pageable.class), eq("john"));
+        }
+
+        @Test
+        @Order(6)
+        @DisplayName("성공 - 빈 검색어로 전체 사용자 목록 조회")
+        void success_GetUserListWithEmptySearch() throws Exception {
+            // given
+            List<User> users = Arrays.asList(UserFixture.createDefaultUser());
+            Page<User> userPage = new PageImpl<>(users, PageRequest.of(0, 10, Sort.by(Sort.Direction.DESC, "createdAt")), 1);
+            when(userSearchService.findAllUsers(any(Pageable.class), eq(""))).thenReturn(userPage);
+
+            // when & then
+            mockMvc.perform(get(USER_LIST_URL)
+                    .param("search", ""))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.users").isArray())
+                .andExpect(jsonPath("$.users.length()").value(1));
+
+            verify(userSearchService, times(1)).findAllUsers(any(Pageable.class), eq(""));
         }
     }
 }
