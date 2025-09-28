@@ -1,7 +1,10 @@
 package com.example.demo.domain.fixture;
 
 import com.example.demo.domain.dto.request.UserRegisterRequest;
+import com.example.demo.domain.dto.request.UserLoginRequest;
 import com.example.demo.domain.dto.response.UserRegisterResponse;
+import com.example.demo.domain.dto.response.UserLoginResponse;
+import com.example.demo.domain.entity.User;
 import com.example.demo.domain.enums.UserRole;
 
 import java.time.LocalDateTime;
@@ -110,6 +113,28 @@ public class UserFixture {
     }
 
     /**
+     * UserRegisterResponse 생성 private 메서드
+     */
+    private static UserRegisterResponse createUserRegisterResponse(String email, String displayName, String avatarUrl) {
+        UserRegisterResponse.UserRegisterResponseBuilder builder = UserRegisterResponse.builder()
+            .id(UUID.randomUUID())
+            .role(UserRole.USER)
+            .createdAt(LocalDateTime.now());
+
+        if (email != null) {
+            builder.email(email);
+        }
+        if (displayName != null) {
+            builder.displayName(displayName);
+        }
+        if (avatarUrl != null) {
+            builder.avatarUrl(avatarUrl);
+        }
+
+        return builder.build();
+    }
+
+    /**
      * UserRegisterRequest 생성 private 메서드
      */
     private static UserRegisterRequest createUserRegisterRequest(String email, String password, String displayName, String avatarUrl) {
@@ -132,24 +157,68 @@ public class UserFixture {
     }
 
     /**
-     * UserRegisterResponse 생성 private 메서드
+     * 기본 UserLoginRequest 생성
      */
-    private static UserRegisterResponse createUserRegisterResponse(String email, String displayName, String avatarUrl) {
-        UserRegisterResponse.UserRegisterResponseBuilder builder = UserRegisterResponse.builder()
+    public static UserLoginRequest createDefaultLoginRequest() {
+        return UserLoginRequest.builder()
+            .email(DEFAULT_EMAIL)
+            .password(DEFAULT_PASSWORD)
+            .build();
+    }
+
+    /**
+     * 커스텀 UserLoginRequest 생성
+     */
+    public static UserLoginRequest createLoginRequest(String email, String password) {
+        return UserLoginRequest.builder()
+            .email(email)
+            .password(password)
+            .build();
+    }
+
+    /**
+     * 이메일이 누락된 UserLoginRequest 생성
+     */
+    public static UserLoginRequest createLoginRequestWithoutEmail() {
+        return UserLoginRequest.builder()
+            .password(DEFAULT_PASSWORD)
+            .build();
+    }
+
+    /**
+     * 비밀번호가 누락된 UserLoginRequest 생성
+     */
+    public static UserLoginRequest createLoginRequestWithoutPassword() {
+        return UserLoginRequest.builder()
+            .email(DEFAULT_EMAIL)
+            .build();
+    }
+
+    /**
+     * 기본 User 엔티티 생성
+     */
+    public static User createDefaultUser() {
+        return User.builder()
             .id(UUID.randomUUID())
+            .email(DEFAULT_EMAIL)
+            .displayName(DEFAULT_DISPLAY_NAME)
+            .avatarUrl(DEFAULT_AVATAR_URL)
             .role(UserRole.USER)
-            .createdAt(LocalDateTime.now());
+            .passwordHash("$2a$10$hashedpassword")
+            .createdAt(LocalDateTime.now())
+            .build();
+    }
 
-        if (email != null) {
-            builder.email(email);
-        }
-        if (displayName != null) {
-            builder.displayName(displayName);
-        }
-        if (avatarUrl != null) {
-            builder.avatarUrl(avatarUrl);
-        }
-
-        return builder.build();
+    /**
+     * 기본 UserLoginResponse 생성
+     */
+    public static UserLoginResponse createDefaultLoginResponse() {
+        return UserLoginResponse.builder()
+            .id(UUID.randomUUID())
+            .email(DEFAULT_EMAIL)
+            .displayName(DEFAULT_DISPLAY_NAME)
+            .avatarUrl(DEFAULT_AVATAR_URL)
+            .role(UserRole.USER)
+            .build();
     }
 }

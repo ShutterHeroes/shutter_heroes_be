@@ -1,12 +1,17 @@
 package com.example.demo.domain.web;
 
 import com.example.demo.domain.dto.request.UserRegisterRequest;
+import com.example.demo.domain.dto.request.UserLoginRequest;
 import com.example.demo.domain.dto.response.UserRegisterResponse;
+import com.example.demo.domain.entity.User;
 import com.example.demo.domain.fixture.UserFixture;
 import com.example.demo.domain.service.UserRegisterService;
+import com.example.demo.domain.service.UserService;
 import com.example.demo.domain.service.UserSearchService;
 import com.example.demo.exceptions.errorcode.UserErrorCode;
+import com.example.demo.exceptions.errorcode.AuthErrorCode;
 import com.example.demo.exceptions.exception.UserException;
+import com.example.demo.exceptions.exception.AuthException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
@@ -43,6 +48,9 @@ class UserControllerTest {
 
     @MockitoBean
     private UserSearchService userSearchService;
+
+    @MockitoBean
+    private UserService userService;
 
     @Test
     @DisplayName("회원가입 성공 - 모든 필드 입력")
@@ -252,5 +260,100 @@ class UserControllerTest {
             .andExpect(status().isBadRequest());
 
         verify(userSearchService, never()).existsByEmail(any());
+    }
+
+    @Test
+    @DisplayName("로그인 성공")
+    void loginSuccess() throws Exception {
+        // given
+        UserLoginRequest request = UserFixture.createDefaultLoginRequest();
+        User user = UserFixture.createDefaultUser();
+
+        when(userService.login(any(UserLoginRequest.class), any())).thenReturn(user);
+
+        // when & then
+        mockMvc.perform(post("/api/v1/users/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andDo(print())
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.email").value("test@example.com"))
+            .andExpect(jsonPath("$.displayName").value("테스트유저"))
+            .andExpect(jsonPath("$.avatarUrl").value("https://example.com/avatar.jpg"))
+            .andExpect(jsonPath("$.role").value("user"))
+            .andExpect(jsonPath("$.id").exists())
+            .andExpect(jsonPath("$.accessToken").doesNotExist())
+            .andExpect(jsonPath("$.refreshToken").doesNotExist());
+
+        verify(userService, times(1)).login(any(UserLoginRequest.class), any());
+    }
+
+    @Test
+    @DisplayName("로그인 실패 - 잘못된 이메일 또는 비밀번호")
+    void loginFail_InvalidCredentials() throws Exception {
+        // given
+        UserLoginRequest request = UserFixture.createLoginRequest("wrong@example.com", "wrongpassword");
+
+        when(userService.login(any(UserLoginRequest.class), any()))
+            .thenThrow(new AuthException(AuthErrorCode.INVALID_CREDENTIALS));
+
+        // when & then
+        mockMvc.perform(post("/api/v1/users/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andDo(print())
+            .andExpect(status().isUnauthorized())
+            .andExpect(jsonPath("$.code").value("AUTH_0002"))
+            .andExpect(jsonPath("$.errorMessage").value("이메일 또는 비밀번호가 올바르지 않습니다"));
+
+        verify(userService, times(1)).login(any(UserLoginRequest.class), any());
+    }
+
+    @Test
+    @DisplayName("로그인 실패 - 이메일 누락")
+    void loginFail_EmailMissing() throws Exception {
+        // given
+        UserLoginRequest request = UserFixture.createLoginRequestWithoutEmail();
+
+        // when & then
+        mockMvc.perform(post("/api/v1/users/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andDo(print())
+            .andExpect(status().isBadRequest());
+
+        verify(userService, never()).login(any(), any());
+    }
+
+    @Test
+    @DisplayName("로그인 실패 - 비밀번호 누락")
+    void loginFail_PasswordMissing() throws Exception {
+        // given
+        UserLoginRequest request = UserFixture.createLoginRequestWithoutPassword();
+
+        // when & then
+        mockMvc.perform(post("/api/v1/users/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andDo(print())
+            .andExpect(status().isBadRequest());
+
+        verify(userService, never()).login(any(), any());
+    }
+
+    @Test
+    @DisplayName("로그인 실패 - 잘못된 이메일 형식")
+    void loginFail_InvalidEmailFormat() throws Exception {
+        // given
+        UserLoginRequest request = UserFixture.createLoginRequest("invalid-email", "password123");
+
+        // when & then
+        mockMvc.perform(post("/api/v1/users/login")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(objectMapper.writeValueAsString(request)))
+            .andDo(print())
+            .andExpect(status().isBadRequest());
+
+        verify(userService, never()).login(any(), any());
     }
 }
