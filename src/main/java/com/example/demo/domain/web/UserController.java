@@ -1,14 +1,19 @@
 package com.example.demo.domain.web;
 
 import com.example.demo.domain.dto.request.UserRegisterRequest;
+import com.example.demo.domain.dto.request.UserLoginRequest;
 import com.example.demo.domain.dto.response.UserRegisterResponse;
+import com.example.demo.domain.dto.response.UserLoginResponse;
 import com.example.demo.domain.dto.response.UserEmailExistsResponse;
+import com.example.demo.domain.entity.User;
 import com.example.demo.domain.service.UserRegisterService;
+import com.example.demo.domain.service.UserService;
 import com.example.demo.domain.service.UserSearchService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -25,6 +30,7 @@ public class UserController {
 
     private final UserRegisterService userRegisterService;
     private final UserSearchService userSearchService;
+    private final UserService userService;
 
     @PostMapping("/register")
     @Operation(summary = "회원가입", description = "이메일과 비밀번호를 사용한 회원가입")
@@ -38,6 +44,22 @@ public class UserController {
     ) {
         UserRegisterResponse response = userRegisterService.register(request);
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    @PostMapping("/login")
+    @Operation(summary = "로그인", description = "이메일과 비밀번호를 사용한 로그인 (JWT 토큰은 쿠키로 전달)")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "로그인 성공"),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청 (유효성 검증 실패)"),
+        @ApiResponse(responseCode = "401", description = "인증 실패 (이메일 또는 비밀번호 불일치)")
+    })
+    public ResponseEntity<UserLoginResponse> login(
+        @Valid @RequestBody UserLoginRequest request,
+        HttpServletResponse httpResponse
+    ) {
+        User user = userService.login(request, httpResponse);
+        UserLoginResponse response = UserLoginResponse.from(user);
+        return ResponseEntity.ok(response);
     }
 
     @GetMapping("/exists")
