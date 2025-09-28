@@ -1,6 +1,6 @@
 package com.example.demo.config.security;
 
-import com.example.demo.exceptions.CommonException;
+import com.example.demo.exceptions.exception.CommonException;
 import com.example.demo.exceptions.dto.CustomExceptionResponse;
 import com.example.demo.exceptions.dto.WarnLogData;
 import com.fasterxml.jackson.databind.ObjectMapper;

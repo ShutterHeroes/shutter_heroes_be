@@ -2,6 +2,7 @@ package com.example.demo.exceptions;
 
 import com.example.demo.exceptions.dto.CustomExceptionResponse;
 import com.example.demo.exceptions.dto.WarnLogData;
+import com.example.demo.exceptions.exception.CommonException;
 import jakarta.validation.ConstraintViolationException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
