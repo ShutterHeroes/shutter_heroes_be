@@ -61,6 +61,9 @@ public class SecurityConfiguration {
                     auth.requestMatchers(HttpMethod.GET, "/oauth2/authorization/kakao").permitAll();
                     auth.requestMatchers(HttpMethod.GET, "/login/oauth2/code/kakao").permitAll();
 
+                    // 회원가입 API 허용
+                    auth.requestMatchers(HttpMethod.POST, "/api/v1/users/register").permitAll();
+
                 // Swagger UI 경로 허용 (기본 생성 문서)
                     auth.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**", "/favicon.ico").permitAll();
 

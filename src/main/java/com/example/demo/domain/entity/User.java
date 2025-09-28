@@ -1,6 +1,7 @@
 package com.example.demo.domain.entity;
 
 import com.example.demo.domain.converter.UserRoleConverter;
+import com.example.demo.domain.dto.request.UserRegisterRequest;
 import com.example.demo.domain.enums.LoginPlatform;
 import com.example.demo.domain.enums.UserRole;
 import jakarta.persistence.*;
@@ -11,6 +12,8 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.ColumnTransformer;
 import org.hibernate.annotations.UuidGenerator;
+import org.springframework.security.crypto.password.PasswordEncoder;
+import org.springframework.util.StringUtils;
 
 import java.time.LocalDateTime;
 import java.util.UUID;
@@ -83,6 +86,29 @@ public class User {
             .email(email)
             .passwordHash(UUID.randomUUID().toString())
             .displayName(displayName)
+            .role(UserRole.USER)
+            .build();
+    }
+
+    /**
+     * 회원가입 요청을 User 엔티티로 변환
+     *
+     * @param passwordEncoder 비밀번호 인코더
+     * @param request 회원가입 요청 DTO
+     * @return User 엔티티
+     */
+    public static User toEntity(PasswordEncoder passwordEncoder, UserRegisterRequest request) {
+        // displayName이 없으면 이메일의 @ 앞부분을 사용
+        String displayName = StringUtils.hasText(request.getDisplayName())
+            ? request.getDisplayName()
+            : request.getEmail().split("@")[0];
+
+        // 사용자 엔티티 생성
+        return User.builder()
+            .email(request.getEmail())
+            .passwordHash(passwordEncoder.encode(request.getPassword()))
+            .displayName(displayName)
+            .avatarUrl(request.getAvatarUrl())
             .role(UserRole.USER)
             .build();
     }

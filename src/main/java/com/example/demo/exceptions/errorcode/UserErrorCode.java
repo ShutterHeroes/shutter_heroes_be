@@ -4,7 +4,8 @@ import org.springframework.http.HttpStatus;
 
 public enum UserErrorCode implements ErrorCode {
     NOT_EXIST(HttpStatus.NOT_FOUND, "U_0001", "존재하지 않는 유저입니다"),
-    DEACTIVATED_USER(HttpStatus.FORBIDDEN, "U_0002", "비활성화된 사용자입니다");
+    DEACTIVATED_USER(HttpStatus.FORBIDDEN, "U_0002", "비활성화된 사용자입니다"),
+    DUPLICATE_EMAIL(HttpStatus.CONFLICT, "U_0003", "이미 존재하는 이메일입니다");
 
     private final HttpStatus httpStatus;
     private final String errorCode;
