@@ -64,7 +64,7 @@ public class Sighting {
     @Column(name = "address_text", columnDefinition = "TEXT")
     private String addressText;
 
-    @Column(name = "geom")
+    @Column(name = "geom", columnDefinition = "geometry(Point,4326)")
     private Point geom;
 
     @Column(name = "created_at", nullable = false, updatable = false)
