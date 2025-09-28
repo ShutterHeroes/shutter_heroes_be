@@ -25,6 +25,7 @@ import org.springframework.boot.test.autoconfigure.restdocs.AutoConfigureRestDoc
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.http.MediaType;
+import org.springframework.security.test.context.support.WithMockUser;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.transaction.annotation.Transactional;
@@ -422,6 +423,75 @@ class UserControllerTest {
                 .andExpect(status().isBadRequest());
 
             verify(userSearchService, never()).existsByEmail(any());
+        }
+    }
+
+    @Nested
+    @DisplayName("나의 정보 조회 API")
+    @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+    class MyProfileTests {
+
+        private final String MY_PROFILE_URL = "/api/v1/users/me";
+
+        @BeforeEach
+        void setUp() {
+            reset(userSearchService);
+        }
+
+        // ========== 성공 케이스 ==========
+        @Test
+        @Order(1)
+        @DisplayName("성공 - 인증된 사용자의 프로필 조회")
+        @WithMockUser(username = "test@example.com")
+        void success_GetMyProfile() throws Exception {
+            // given
+            User user = UserFixture.createDefaultUser();
+            when(userSearchService.findByEmail("test@example.com")).thenReturn(user);
+
+            // when & then
+            mockMvc.perform(get(MY_PROFILE_URL))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.email").value("test@example.com"))
+                .andExpect(jsonPath("$.displayName").value("테스트유저"))
+                .andExpect(jsonPath("$.avatarUrl").value("https://example.com/avatar.jpg"))
+                .andExpect(jsonPath("$.role").value("user"))
+                .andExpect(jsonPath("$.id").exists())
+                .andExpect(jsonPath("$.createdAt").exists());
+
+            verify(userSearchService, times(1)).findByEmail("test@example.com");
+        }
+
+        // ========== 실패 케이스 - 인증 오류 ==========
+        @Test
+        @Order(2)
+        @DisplayName("실패 - 인증되지 않은 사용자")
+        void fail_Unauthenticated() throws Exception {
+            // when & then
+            mockMvc.perform(get(MY_PROFILE_URL))
+                .andDo(print())
+                .andExpect(status().isUnauthorized());
+
+            verify(userSearchService, never()).findByEmail(any());
+        }
+
+        @Test
+        @Order(3)
+        @DisplayName("실패 - 존재하지 않는 사용자")
+        @WithMockUser(username = "nonexistent@example.com")
+        void fail_UserNotFound() throws Exception {
+            // given
+            when(userSearchService.findByEmail("nonexistent@example.com"))
+                .thenThrow(new UserException(UserErrorCode.NOT_EXIST));
+
+            // when & then
+            mockMvc.perform(get(MY_PROFILE_URL))
+                .andDo(print())
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("U_0001"))
+                .andExpect(jsonPath("$.errorMessage").value("존재하지 않는 유저입니다"));
+
+            verify(userSearchService, times(1)).findByEmail("nonexistent@example.com");
         }
     }
 }
