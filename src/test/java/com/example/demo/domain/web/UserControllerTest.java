@@ -4,6 +4,7 @@ import com.example.demo.domain.dto.request.UserRegisterRequest;
 import com.example.demo.domain.dto.response.UserRegisterResponse;
 import com.example.demo.domain.fixture.UserFixture;
 import com.example.demo.domain.service.UserRegisterService;
+import com.example.demo.domain.service.UserSearchService;
 import com.example.demo.exceptions.errorcode.UserErrorCode;
 import com.example.demo.exceptions.exception.UserException;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -20,6 +21,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
@@ -38,6 +40,9 @@ class UserControllerTest {
 
     @MockitoBean
     private UserRegisterService userRegisterService;
+
+    @MockitoBean
+    private UserSearchService userSearchService;
 
     @Test
     @DisplayName("회원가입 성공 - 모든 필드 입력")
@@ -202,5 +207,50 @@ class UserControllerTest {
             .andExpect(status().isBadRequest());
 
         verify(userRegisterService, never()).register(any());
+    }
+
+    @Test
+    @DisplayName("이메일 존재 확인 - 존재하는 이메일")
+    void checkEmailExists_ExistingEmail() throws Exception {
+        // given
+        String email = "existing@example.com";
+        when(userSearchService.existsByEmail(email)).thenReturn(true);
+
+        // when & then
+        mockMvc.perform(get("/api/v1/users/exists")
+                .param("email", email))
+            .andDo(print())
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.exists").value(true));
+
+        verify(userSearchService, times(1)).existsByEmail(email);
+    }
+
+    @Test
+    @DisplayName("이메일 존재 확인 - 존재하지 않는 이메일")
+    void checkEmailExists_NonExistingEmail() throws Exception {
+        // given
+        String email = "nonexisting@example.com";
+        when(userSearchService.existsByEmail(email)).thenReturn(false);
+
+        // when & then
+        mockMvc.perform(get("/api/v1/users/exists")
+                .param("email", email))
+            .andDo(print())
+            .andExpect(status().isOk())
+            .andExpect(jsonPath("$.exists").value(false));
+
+        verify(userSearchService, times(1)).existsByEmail(email);
+    }
+
+    @Test
+    @DisplayName("이메일 존재 확인 실패 - 이메일 파라미터 누락")
+    void checkEmailExists_MissingEmailParameter() throws Exception {
+        // when & then
+        mockMvc.perform(get("/api/v1/users/exists"))
+            .andDo(print())
+            .andExpect(status().isBadRequest());
+
+        verify(userSearchService, never()).existsByEmail(any());
     }
 }
