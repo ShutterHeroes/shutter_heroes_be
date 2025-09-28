@@ -10,7 +10,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 @Entity
-@Table(name = "media", schema = "app")
+@Table(name = "media")
 @Getter
 @Setter
 @NoArgsConstructor

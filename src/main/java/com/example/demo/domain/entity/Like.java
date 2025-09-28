@@ -11,7 +11,7 @@ import java.util.Objects;
 import java.util.UUID;
 
 @Entity
-@Table(name = "likes", schema = "app")
+@Table(name = "likes")
 @IdClass(Like.LikeId.class)
 @Getter
 @Setter
