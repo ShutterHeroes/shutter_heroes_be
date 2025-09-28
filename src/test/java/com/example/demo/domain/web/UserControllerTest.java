@@ -2,6 +2,7 @@ package com.example.demo.domain.web;
 
 import com.example.demo.domain.dto.request.UserRegisterRequest;
 import com.example.demo.domain.dto.request.UserLoginRequest;
+import com.example.demo.domain.dto.request.UserUpdateRequest;
 import com.example.demo.domain.dto.response.UserRegisterResponse;
 import com.example.demo.domain.entity.User;
 import com.example.demo.domain.fixture.UserFixture;
@@ -44,6 +45,7 @@ import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.*;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.put;
 import static org.springframework.test.web.servlet.result.MockMvcResultHandlers.print;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
 
@@ -737,6 +739,261 @@ class UserControllerTest {
                 .andExpect(status().isBadRequest());
 
             verify(userSearchService, never()).findById(any(UUID.class));
+        }
+    }
+
+    @Nested
+    @DisplayName("나의 정보 수정 API")
+    @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+    class UserUpdateTests {
+
+        private final String UPDATE_PROFILE_URL = "/api/v1/users/me";
+
+        @BeforeEach
+        void setUp() {
+            reset(userSearchService, userService);
+        }
+
+        // ========== 성공 케이스 ==========
+        @Test
+        @Order(1)
+        @DisplayName("성공 - 프로필 정보 전체 수정")
+        @WithMockUser(username = "test@example.com")
+        void success_UpdateAllProfileFields() throws Exception {
+            // given
+            UserUpdateRequest request = UserUpdateRequest.builder()
+                .displayName("새로운이름")
+                .avatarUrl("https://example.com/new-avatar.jpg")
+                .build();
+
+            User updatedUser = UserFixture.createDefaultUser();
+            updatedUser.update(request);
+
+            when(userService.updateUser(eq("test@example.com"), any(UserUpdateRequest.class))).thenReturn(updatedUser);
+
+            // when & then
+            mockMvc.perform(put(UPDATE_PROFILE_URL)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.displayName").value("새로운이름"))
+                .andExpect(jsonPath("$.avatarUrl").value("https://example.com/new-avatar.jpg"))
+                .andExpect(jsonPath("$.email").value("test@example.com"))
+                .andExpect(jsonPath("$.id").exists())
+                .andExpect(jsonPath("$.updatedAt").exists());
+
+            verify(userService, times(1)).updateUser(eq("test@example.com"), any(UserUpdateRequest.class));
+        }
+
+        @Test
+        @Order(2)
+        @DisplayName("성공 - displayName만 수정")
+        @WithMockUser(username = "test@example.com")
+        void success_UpdateDisplayNameOnly() throws Exception {
+            // given
+            UserUpdateRequest request = UserUpdateRequest.builder()
+                .displayName("새로운이름")
+                .build();
+
+            User updatedUser = UserFixture.createDefaultUser();
+            updatedUser.update(request);
+
+            when(userService.updateUser(eq("test@example.com"), any(UserUpdateRequest.class))).thenReturn(updatedUser);
+
+            // when & then
+            mockMvc.perform(put(UPDATE_PROFILE_URL)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.displayName").value("새로운이름"))
+                .andExpect(jsonPath("$.avatarUrl").value("https://example.com/avatar.jpg"));
+
+            verify(userService, times(1)).updateUser(eq("test@example.com"), any(UserUpdateRequest.class));
+        }
+
+        @Test
+        @Order(3)
+        @DisplayName("성공 - avatarUrl만 수정")
+        @WithMockUser(username = "test@example.com")
+        void success_UpdateAvatarUrlOnly() throws Exception {
+            // given
+            UserUpdateRequest request = UserUpdateRequest.builder()
+                .avatarUrl("https://example.com/new-avatar.jpg")
+                .build();
+
+            User updatedUser = UserFixture.createDefaultUser();
+            updatedUser.update(request);
+
+            when(userService.updateUser(eq("test@example.com"), any(UserUpdateRequest.class))).thenReturn(updatedUser);
+
+            // when & then
+            mockMvc.perform(put(UPDATE_PROFILE_URL)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.displayName").value("테스트유저"))
+                .andExpect(jsonPath("$.avatarUrl").value("https://example.com/new-avatar.jpg"));
+
+            verify(userService, times(1)).updateUser(eq("test@example.com"), any(UserUpdateRequest.class));
+        }
+
+        @Test
+        @Order(4)
+        @DisplayName("성공 - avatarUrl을 null로 설정하여 제거")
+        @WithMockUser(username = "test@example.com")
+        void success_RemoveAvatarUrl() throws Exception {
+            // given
+            UserUpdateRequest request = UserUpdateRequest.builder()
+                .avatarUrl(null)
+                .build();
+
+            User updatedUser = UserFixture.createDefaultUser();
+            updatedUser.update(request);
+
+            when(userService.updateUser(eq("test@example.com"), any(UserUpdateRequest.class))).thenReturn(updatedUser);
+
+            // when & then
+            mockMvc.perform(put(UPDATE_PROFILE_URL)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isOk());
+
+            verify(userService, times(1)).updateUser(eq("test@example.com"), any(UserUpdateRequest.class));
+        }
+
+        // ========== 실패 케이스 - 유효성 검증 ==========
+        @Test
+        @Order(5)
+        @DisplayName("실패 - displayName이 너무 긴 경우")
+        @WithMockUser(username = "test@example.com")
+        void fail_DisplayNameTooLong() throws Exception {
+            // given
+            String longDisplayName = "a".repeat(101); // 101자
+            UserUpdateRequest request = UserUpdateRequest.builder()
+                .displayName(longDisplayName)
+                .build();
+
+            // when & then
+            mockMvc.perform(put(UPDATE_PROFILE_URL)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isBadRequest());
+
+            verify(userService, never()).updateUser(any(), any());
+        }
+
+        @Test
+        @Order(6)
+        @DisplayName("실패 - avatarUrl이 너무 긴 경우")
+        @WithMockUser(username = "test@example.com")
+        void fail_AvatarUrlTooLong() throws Exception {
+            // given
+            String longUrl = "https://example.com/" + "a".repeat(500); // 500자 이상
+            UserUpdateRequest request = UserUpdateRequest.builder()
+                .avatarUrl(longUrl)
+                .build();
+
+            // when & then
+            mockMvc.perform(put(UPDATE_PROFILE_URL)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isBadRequest());
+
+            verify(userService, never()).updateUser(any(), any());
+        }
+
+        @Test
+        @Order(7)
+        @DisplayName("실패 - displayName이 빈 문자열인 경우")
+        @WithMockUser(username = "test@example.com")
+        void fail_EmptyDisplayName() throws Exception {
+            // given
+            UserUpdateRequest request = UserUpdateRequest.builder()
+                .displayName("")
+                .build();
+
+            // when & then
+            mockMvc.perform(put(UPDATE_PROFILE_URL)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isBadRequest());
+
+            verify(userService, never()).updateUser(any(), any());
+        }
+
+        // ========== 실패 케이스 - 인증 오류 ==========
+        @Test
+        @Order(8)
+        @DisplayName("실패 - 인증되지 않은 사용자")
+        void fail_Unauthenticated() throws Exception {
+            // given
+            UserUpdateRequest request = UserUpdateRequest.builder()
+                .displayName("새로운이름")
+                .build();
+
+            // when & then
+            mockMvc.perform(put(UPDATE_PROFILE_URL)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isUnauthorized());
+
+            verify(userService, never()).updateUser(any(), any());
+        }
+
+        @Test
+        @Order(9)
+        @DisplayName("실패 - 존재하지 않는 사용자")
+        @WithMockUser(username = "nonexistent@example.com")
+        void fail_UserNotFound() throws Exception {
+            // given
+            UserUpdateRequest request = UserUpdateRequest.builder()
+                .displayName("새로운이름")
+                .build();
+
+            when(userService.updateUser(eq("nonexistent@example.com"), any(UserUpdateRequest.class)))
+                .thenThrow(new UserException(UserErrorCode.NOT_EXIST));
+
+            // when & then
+            mockMvc.perform(put(UPDATE_PROFILE_URL)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isNotFound())
+                .andExpect(jsonPath("$.code").value("U_0001"))
+                .andExpect(jsonPath("$.errorMessage").value("존재하지 않는 유저입니다"));
+
+            verify(userService, times(1)).updateUser(eq("nonexistent@example.com"), any(UserUpdateRequest.class));
+        }
+
+        @Test
+        @Order(10)
+        @DisplayName("성공 - 빈 요청 바디로 호출 시 아무것도 수정하지 않음")
+        @WithMockUser(username = "test@example.com")
+        void success_EmptyRequestBody() throws Exception {
+            // given
+            UserUpdateRequest request = UserUpdateRequest.builder().build();
+
+            User user = UserFixture.createDefaultUser();
+            when(userService.updateUser(eq("test@example.com"), any(UserUpdateRequest.class))).thenReturn(user);
+
+            // when & then
+            mockMvc.perform(put(UPDATE_PROFILE_URL)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(objectMapper.writeValueAsString(request)))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.displayName").value("테스트유저"))
+                .andExpect(jsonPath("$.avatarUrl").value("https://example.com/avatar.jpg"));
+
+            verify(userService, times(1)).updateUser(eq("test@example.com"), any(UserUpdateRequest.class));
         }
     }
 }
