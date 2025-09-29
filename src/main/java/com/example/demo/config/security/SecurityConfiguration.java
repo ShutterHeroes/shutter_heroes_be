@@ -62,6 +62,7 @@ public class SecurityConfiguration {
                     // 유저 관련 API
                     auth.requestMatchers(HttpMethod.POST, "/api/v1/users/register").permitAll();
                     auth.requestMatchers(HttpMethod.POST, "/api/v1/users/login").permitAll();
+                    auth.requestMatchers(HttpMethod.POST, "/api/v1/users/logout").authenticated();
                     auth.requestMatchers(HttpMethod.GET, "/api/v1/users/exists").permitAll();
                     auth.requestMatchers(HttpMethod.GET, "/api/v1/users").permitAll();
                     auth.requestMatchers(HttpMethod.GET, "/api/v1/users/me").authenticated();

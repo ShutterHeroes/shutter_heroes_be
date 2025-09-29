@@ -5,6 +5,7 @@ import com.example.demo.domain.dto.request.UserLoginRequest;
 import com.example.demo.domain.dto.request.UserUpdateRequest;
 import com.example.demo.domain.dto.response.UserRegisterResponse;
 import com.example.demo.domain.dto.response.UserLoginResponse;
+import com.example.demo.domain.dto.response.UserLogoutResponse;
 import com.example.demo.domain.dto.response.UserEmailExistsResponse;
 import com.example.demo.domain.dto.response.UserProfileResponse;
 import com.example.demo.domain.dto.response.UserListResponse;
@@ -73,6 +74,20 @@ public class UserController {
         User user = userService.login(request, httpResponse);
         UserLoginResponse response = UserLoginResponse.from(user);
         return ResponseEntity.ok(response);
+    }
+
+    @PostMapping("/logout")
+    @Operation(summary = "로그아웃", description = "JWT 토큰 쿠키를 제거하여 로그아웃 처리")
+    @ApiResponses(value = {
+        @ApiResponse(responseCode = "200", description = "로그아웃 성공"),
+        @ApiResponse(responseCode = "401", description = "인증 실패 (JWT 토큰 없음 또는 유효하지 않음)")
+    })
+    public ResponseEntity<UserLogoutResponse> logout(
+        @AuthenticationPrincipal UserDetails userDetails,
+        HttpServletResponse httpResponse
+    ) {
+        userService.logout(httpResponse);
+        return ResponseEntity.ok(UserLogoutResponse.success());
     }
 
     @GetMapping("/exists")
