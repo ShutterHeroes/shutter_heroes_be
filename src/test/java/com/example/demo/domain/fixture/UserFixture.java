@@ -221,4 +221,19 @@ public class UserFixture {
             .role(UserRole.USER)
             .build();
     }
+
+    /**
+     * 커스텀 이메일과 디스플레이명으로 User 엔티티 생성
+     */
+    public static User createUserWithEmailAndDisplayName(String email, String displayName) {
+        return User.builder()
+            .id(UUID.randomUUID())
+            .email(email)
+            .displayName(displayName)
+            .avatarUrl(DEFAULT_AVATAR_URL)
+            .role(UserRole.USER)
+            .passwordHash("$2a$10$hashedpassword")
+            .createdAt(LocalDateTime.now())
+            .build();
+    }
 }
