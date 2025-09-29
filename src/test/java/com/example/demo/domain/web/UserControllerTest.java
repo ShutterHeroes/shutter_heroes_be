@@ -376,6 +376,53 @@ class UserControllerTest {
     }
 
     @Nested
+    @DisplayName("로그아웃 API")
+    @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
+    class LogoutTests {
+
+        private final String LOGOUT_URL = "/api/v1/users/logout";
+
+        @BeforeEach
+        void setUp() {
+            reset(userService);
+        }
+
+        // ========== 성공 케이스 ==========
+        @Test
+        @Order(1)
+        @DisplayName("성공 - 로그아웃 처리")
+        @WithMockUser(username = "test@example.com", roles = "USER")
+        void success_Logout() throws Exception {
+            // given
+            doNothing().when(userService).logout(any());
+
+            // when & then
+            mockMvc.perform(post(LOGOUT_URL)
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andDo(print())
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.message").value("Successfully logged out"))
+                .andExpect(jsonPath("$.success").value(true));
+
+            verify(userService, times(1)).logout(any());
+        }
+
+        // ========== 실패 케이스 - 인증 오류 ==========
+        @Test
+        @Order(2)
+        @DisplayName("실패 - 인증되지 않은 사용자")
+        void fail_Unauthenticated() throws Exception {
+            // when & then
+            mockMvc.perform(post(LOGOUT_URL)
+                    .contentType(MediaType.APPLICATION_JSON))
+                .andDo(print())
+                .andExpect(status().isUnauthorized());
+
+            verify(userService, never()).logout(any());
+        }
+    }
+
+    @Nested
     @DisplayName("이메일 존재 확인 API")
     @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
     class EmailExistsTests {
