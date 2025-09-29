@@ -6,8 +6,11 @@ import com.example.demo.domain.web.dto.MediaBrowseItemDto;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.data.jpa.repository.Modifying;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.UUID;
 
@@ -79,4 +82,62 @@ public interface MediaRepository extends JpaRepository<Media, UUID> {
         nativeQuery = true
     )
     Page<MediaBrowseRow> pageVisibleFor(@Param("viewerId") UUID viewerId, Pageable pageable);
+
+     /** 소유자 확인: media의 user_id를 조회 (없으면 null) */
+    @Query(value = "select user_id from app.media where id = :mediaId", nativeQuery = true)
+    UUID findOwnerIdByMediaId(@Param("mediaId") UUID mediaId);
+
+    /** [USER 전용] 내 미디어에 연결된 내 sighting들의 visibility 일괄 변경 */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query(value = """
+        update app.sightings
+           set visibility = CAST(:visibility AS app.visibility)
+         where media_id = :mediaId
+           and user_id  = :ownerId
+    """, nativeQuery = true)
+    int updateSightingVisibilityForOwner(@Param("mediaId") UUID mediaId,
+                                         @Param("ownerId") UUID ownerId,
+                                         @Param("visibility") String visibilityLowercase);
+
+    /** [ADMIN 전용] media에 연결된 모든 sighting들의 visibility 일괄 변경 */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query(value = """
+        update app.sightings
+           set visibility = CAST(:visibility AS app.visibility)
+         where media_id = :mediaId
+    """, nativeQuery = true)
+    int updateSightingVisibilityAsAdmin(@Param("mediaId") UUID mediaId,
+                                        @Param("visibility") String visibilityLowercase);
+
+    /** [USER 전용] 내 미디어의 sighting 먼저 삭제 */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query(value = """
+        delete from app.sightings
+         where media_id = :mediaId
+           and user_id  = :ownerId
+    """, nativeQuery = true)
+    int deleteSightingsByMediaForOwner(@Param("mediaId") UUID mediaId,
+                                       @Param("ownerId") UUID ownerId);
+
+    /** [ADMIN 전용] 미디어의 모든 sighting 삭제 */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query(value = "delete from app.sightings where media_id = :mediaId", nativeQuery = true)
+    int deleteSightingsByMediaAsAdmin(@Param("mediaId") UUID mediaId);
+
+    /** [USER 전용] 본인 소유 media 삭제 (외래키 오류 예방 위해 먼저 sighting 삭제 후 호출) */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query(value = "delete from app.media where id = :mediaId and user_id = :ownerId", nativeQuery = true)
+    int deleteMediaByIdForOwner(@Param("mediaId") UUID mediaId,
+                                @Param("ownerId") UUID ownerId);
+
+    /** [ADMIN 전용] media 강제 삭제 */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Transactional
+    @Query(value = "delete from app.media where id = :mediaId", nativeQuery = true)
+    int deleteMediaByIdAsAdmin(@Param("mediaId") UUID mediaId);
 }
