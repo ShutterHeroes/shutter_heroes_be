@@ -23,6 +23,7 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
 import org.springframework.web.filter.CharacterEncodingFilter;
 import org.springframework.web.filter.CorsFilter;
 
+
 @RequiredArgsConstructor
 @Configuration
 @EnableWebSecurity
@@ -68,7 +69,9 @@ public class SecurityConfiguration {
                     auth.requestMatchers(HttpMethod.GET, "/api/v1/users/me").authenticated();
                     auth.requestMatchers(HttpMethod.PUT, "/api/v1/users/me").authenticated();
                     auth.requestMatchers(HttpMethod.GET, "/api/v1/users/{userId}").permitAll();
-
+                    // 이미지 권한
+                    auth.requestMatchers(HttpMethod.GET, "/api/v1/medias/browse").permitAll();   // 공개 피드 누구나
+                    auth.requestMatchers(HttpMethod.GET, "/api/v1/medias/my").authenticated();   // 내 업로드는 로그인 필요
                 // Swagger UI 경로 허용 (기본 생성 문서)
                     auth.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**", "/favicon.ico").permitAll();
 
