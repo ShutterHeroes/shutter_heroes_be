@@ -61,6 +61,15 @@ public class UserService {
     }
 
     @Transactional
+    public void logout(HttpServletResponse response) {
+        // JWT 쿠키 제거 (maxAge를 0으로 설정하여 즉시 만료)
+        removeCookie(response, JwtRule.ACCESS_PREFIX.getValue());
+        removeCookie(response, JwtRule.REFRESH_PREFIX.getValue());
+
+        log.info("User logout successful");
+    }
+
+    @Transactional
     public User updateUser(String email, UserUpdateRequest request) {
         // 이메일로 사용자 찾기
         User user = userSearchService.findByEmail(email);
@@ -80,6 +89,16 @@ public class UserService {
         cookie.setSecure(true);
         cookie.setPath("/");
         cookie.setMaxAge(maxAge);
+        cookie.setAttribute("SameSite", "Strict");
+        response.addCookie(cookie);
+    }
+
+    private void removeCookie(HttpServletResponse response, String name) {
+        Cookie cookie = new Cookie(name, "");
+        cookie.setHttpOnly(true);
+        cookie.setSecure(true);
+        cookie.setPath("/");
+        cookie.setMaxAge(0); // 즉시 만료
         cookie.setAttribute("SameSite", "Strict");
         response.addCookie(cookie);
     }
