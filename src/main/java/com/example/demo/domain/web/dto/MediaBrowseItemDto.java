@@ -44,8 +44,8 @@ public class MediaBrowseItemDto {
                               Integer width, Integer height, LocalDateTime createdAt,
                               UUID ownerId, UUID sightingId, Visibility sightingVisibility) {
         this(mediaId, storagePath, mimeType, width, height,
-                createdAt != null ? createdAt.atOffset(OffsetDateTime.now().getOffset()) : null,
-                ownerId, sightingId, sightingVisibility);
+             createdAt != null ? createdAt.atOffset(OffsetDateTime.now().getOffset()) : null,
+             ownerId, sightingId, sightingVisibility);
     }
 
     // createdAt = Instant 인 경우
@@ -53,8 +53,8 @@ public class MediaBrowseItemDto {
                               Integer width, Integer height, Instant createdAt,
                               UUID ownerId, UUID sightingId, Visibility sightingVisibility) {
         this(mediaId, storagePath, mimeType, width, height,
-                createdAt != null ? createdAt.atOffset(OffsetDateTime.now().getOffset()) : null,
-                ownerId, sightingId, sightingVisibility);
+             createdAt != null ? createdAt.atOffset(OffsetDateTime.now().getOffset()) : null,
+             ownerId, sightingId, sightingVisibility);
     }
 
     // ===== Getter (직렬화용) =====

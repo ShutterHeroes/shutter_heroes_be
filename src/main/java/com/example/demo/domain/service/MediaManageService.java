@@ -43,7 +43,7 @@ public class MediaManageService {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You are not the owner of this media");
             }
             updated = mediaRepository.updateSightingVisibilityForOwner(mediaId, actorId, visibility);
-        } else {
+        }  else {
             updated = mediaRepository.updateSightingVisibilityAsAdmin(mediaId, visibility);
         }
 

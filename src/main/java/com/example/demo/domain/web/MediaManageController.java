@@ -23,8 +23,8 @@ import java.util.UUID;
 
 @RequiredArgsConstructor
 @RestController
-@RequestMapping("/api/v1/medias")
-@Tag(name = "Medias: Manage")
+@RequestMapping("/api/v1/media")
+@Tag(name = "Media: Manage")
 public class MediaManageController {
 
     private final MediaManageService mediaManageService;
