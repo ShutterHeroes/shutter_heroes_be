@@ -1,4 +1,3 @@
-// C:\github\shutter_heroes_be\src\main\java\com\example\demo\domain\web\dto\UpdateVisibilityResponse.java
 package com.example.demo.domain.web.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;

@@ -1,9 +1,6 @@
 package com.example.demo.domain.web.dto;
 
 import com.example.demo.domain.enums.Visibility;
-// 필요 시 null 필드 숨기고 싶다면 주석 해제하세요.
-// import com.fasterxml.jackson.annotation.JsonInclude;
-// @JsonInclude(JsonInclude.Include.NON_NULL)
 import lombok.AllArgsConstructor;
 import lombok.Getter;
 

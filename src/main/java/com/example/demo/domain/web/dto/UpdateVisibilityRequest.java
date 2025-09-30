@@ -1,4 +1,3 @@
-// C:\github\shutter_heroes_be\src\main\java\com\example\demo\domain\web\dto\UpdateVisibilityRequest.java
 package com.example.demo.domain.web.dto;
 
 import io.swagger.v3.oas.annotations.media.Schema;
@@ -10,7 +9,6 @@ import lombok.*;
 @AllArgsConstructor
 @Builder
 public class UpdateVisibilityRequest {
-
     @Schema(description = "목표 가시성: public 또는 private (대소문자 무시)", example = "public")
     private String visibility;
 }
