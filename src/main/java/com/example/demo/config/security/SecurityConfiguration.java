@@ -68,8 +68,13 @@ public class SecurityConfiguration {
                     auth.requestMatchers(HttpMethod.GET, "/api/v1/users/me").authenticated();
                     auth.requestMatchers(HttpMethod.PUT, "/api/v1/users/me").authenticated();
                     auth.requestMatchers(HttpMethod.GET, "/api/v1/users/{userId}").permitAll();
-
-                // Swagger UI 경로 허용 (기본 생성 문서)
+                    // 이미지 권한
+                    auth.requestMatchers(HttpMethod.GET, "/api/v1/medias/browse").permitAll();   // 공개 피드 누구나
+                    auth.requestMatchers(HttpMethod.GET, "/api/v1/medias/my").authenticated();   // 내 업로드는 로그인 필요
+                    // 미디어 관리: 변경/삭제는 로그인 필요 관리자 전용으로 막고 싶다면 authenticated() 대신 hasRole("ADMIN")
+                    auth.requestMatchers(HttpMethod.PATCH, "/api/v1/medias/*/visibility").authenticated();
+                    auth.requestMatchers(HttpMethod.DELETE, "/api/v1/medias/*").authenticated();
+                    // Swagger UI 경로 허용 (기본 생성 문서)
                     auth.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**", "/favicon.ico").permitAll();
 
                     auth.anyRequest().authenticated();
