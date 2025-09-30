@@ -66,6 +66,7 @@ public class MediaManageController {
             )
             @org.springframework.web.bind.annotation.RequestBody UpdateVisibilityRequest request
     ) {
+        System.out.println("request = " + request.toString() + ":" + request.getVisibility());
         if (principal == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
         return mediaManageService.changeVisibility(mediaId, principal.getId(), isAdmin(principal), request.getVisibility());
     }
@@ -86,10 +87,10 @@ public class MediaManageController {
     @DeleteMapping("/{mediaId}")
     @ResponseStatus(HttpStatus.OK)
     public DeleteMediaResponse deleteMedia(
-            @PathVariable("mediaId") UUID mediaId,
-            @AuthenticationPrincipal UserPrincipal principal
+        @PathVariable("mediaId") UUID mediaId,
+        @AuthenticationPrincipal UserPrincipal principal
     ) {
-        if (principal == null) throw new org.springframework.web.server.ResponseStatusException(HttpStatus.UNAUTHORIZED);
+        
         return mediaManageService.deleteMedia(mediaId, principal.getId(), isAdmin(principal));
     }
 }

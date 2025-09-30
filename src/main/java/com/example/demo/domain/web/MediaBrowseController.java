@@ -33,10 +33,6 @@ public class MediaBrowseController {
             @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC)
             Pageable pageable
     ) {
-        if (principal == null) {
-            // 프로젝트의 예외 체계에 맞춰 커스텀 예외를 던지세요.
-            throw new RuntimeException("UNAUTHORIZED");
-        }
         UUID me = principal.getId();
         return mediaBrowseService.pageMyUploads(me, pageable);
     }
