@@ -2,6 +2,7 @@ package com.example.demo.domain.service;
 
 import com.example.demo.domain.repository.MediaRepository;
 import com.example.demo.domain.web.dto.DeleteMediaResponse;
+import com.example.demo.domain.web.dto.UpdateVisibilityResponse;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -31,24 +32,26 @@ public class MediaManageService {
         return norm;
     }
 
-    /** visibility 변경: 본인 또는 관리자 */
+    /** visibility 변경: 본인 또는 관리자 → 메시지 포함 응답 */
     @Transactional
-    public int changeVisibility(UUID mediaId, UUID actorId, boolean admin, String visibilityRaw) {
+    public UpdateVisibilityResponse changeVisibility(UUID mediaId, UUID actorId, boolean admin, String visibilityRaw) {
         String visibility = normalizeVisibility(visibilityRaw);
 
+        int updated;
         if (!admin) {
-            // 본인 소유 확인
             if (!isOwner(mediaId, actorId)) {
                 throw new ResponseStatusException(HttpStatus.FORBIDDEN, "You are not the owner of this media");
             }
-            return mediaRepository.updateSightingVisibilityForOwner(mediaId, actorId, visibility);
+            updated = mediaRepository.updateSightingVisibilityForOwner(mediaId, actorId, visibility);
         } else {
-            // 관리자: 전체 sighting 일괄 변경
-            return mediaRepository.updateSightingVisibilityAsAdmin(mediaId, visibility);
+            updated = mediaRepository.updateSightingVisibilityAsAdmin(mediaId, visibility);
         }
+
+        String msg = String.format("가시성을 '%s'(으)로 변경했습니다. 적용된 미디어: %d건", visibility, updated);
+        return UpdateVisibilityResponse.of(updated, visibility, msg);
     }
 
-    /** 삭제: 본인 또는 관리자 (sightings → media 순서) */
+    /** 삭제: 본인 또는 관리자 (sightings → media 순서) → 메시지 포함 응답 */
     @Transactional
     public DeleteMediaResponse deleteMedia(UUID mediaId, UUID actorId, boolean admin) {
         int sDel, mDel;
@@ -65,9 +68,9 @@ public class MediaManageService {
         }
 
         if (mDel == 0) {
-            // 이미 지워졌거나 없음
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Media not found");
         }
-        return DeleteMediaResponse.of(sDel, mDel);
+        String msg = String.format("미디어(%s) 삭제 완료 (미디어 %d건 삭제)", mediaId, mDel);
+        return DeleteMediaResponse.ofWithMessage(sDel, mDel, msg);
     }
 }

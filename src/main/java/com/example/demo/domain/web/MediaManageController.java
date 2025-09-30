@@ -4,6 +4,7 @@ import com.example.demo.config.security.oauth2.UserPrincipal;
 import com.example.demo.domain.service.MediaManageService;
 import com.example.demo.domain.web.dto.DeleteMediaResponse;
 import com.example.demo.domain.web.dto.UpdateVisibilityRequest;
+import com.example.demo.domain.web.dto.UpdateVisibilityResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.enums.ParameterIn;
@@ -49,7 +50,7 @@ public class MediaManageController {
     )
     @PatchMapping(value = "/{mediaId}/visibility", consumes = MediaType.APPLICATION_JSON_VALUE)
     @ResponseStatus(HttpStatus.OK)
-    public int updateVisibility(
+    public UpdateVisibilityResponse updateVisibility(
             @PathVariable("mediaId") UUID mediaId,
             @AuthenticationPrincipal UserPrincipal principal,
             @RequestBody(
@@ -57,7 +58,10 @@ public class MediaManageController {
                 content = @Content(
                     mediaType = "application/json",
                     schema = @Schema(implementation = UpdateVisibilityRequest.class),
-                    examples = @ExampleObject(value = "{\"visibility\":\"public\"}")
+                    examples = {
+                        @ExampleObject(name = "public",  value = "{\"visibility\":\"public\"}"),
+                        @ExampleObject(name = "private", value = "{\"visibility\":\"private\"}")
+                    }
                 )
             )
             @org.springframework.web.bind.annotation.RequestBody UpdateVisibilityRequest request
