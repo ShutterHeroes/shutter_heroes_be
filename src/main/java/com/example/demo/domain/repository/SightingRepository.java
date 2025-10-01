@@ -20,12 +20,10 @@ public interface SightingRepository extends JpaRepository<Sighting, UUID> {
     boolean existsByIdInApp(@Param("centerId") UUID centerId);
 
     /**
-     * 기준 sighting의 geom을 중심으로 반경 500m 내 결과 반환(비페이지네이션)
+     * 기준 sighting의 geom을 중심으로 반경 :radiusMeters (m) 내 결과 반환(비페이지네이션)
      * - 비로그인: public만
      * - 로그인: public + (본인 private)
-     * - geom 문자열: s.geom::text (WKT)
-     * - 거리 계산: geometry -> EPSG:3857 로 변환하여 미터 단위 500m
-     * - search_path 가 app 뿐이어도 동작하도록 PostGIS 함수는 public. 접두사로 호출
+     * - PostGIS 함수는 public. 접두사 사용 (search_path=app 환경 대응)
      */
     @Query(value = """
         select
@@ -43,7 +41,7 @@ public interface SightingRepository extends JpaRepository<Sighting, UUID> {
             s.ai_confidence                             as aiConfidence,
             s.visibility::text                          as visibility,
             s.is_verified                               as isVerified,
-            s.geom::text                                as geom,
+            public.ST_AsGeoJSON(s.geom)                 as geom,
             s.created_at                                as createdAt,
             s.updated_at                                as updatedAt
         from app.sightings s
@@ -55,7 +53,7 @@ public interface SightingRepository extends JpaRepository<Sighting, UUID> {
             public.ST_DWithin(
                 public.ST_Transform(s.geom, 3857),
                 public.ST_Transform(c.geom, 3857),
-                500
+                CAST(:radiusMeters AS double precision)   -- 동적 반경(m)
             )
             and (
                 s.visibility = 'public'
@@ -68,5 +66,6 @@ public interface SightingRepository extends JpaRepository<Sighting, UUID> {
         order by s.occurred_at desc nulls last, s.created_at desc
     """, nativeQuery = true)
     List<SightingAroundRow> findAroundBySighting(@Param("centerId") UUID centerId,
-                                                 @Param("viewerId") UUID viewerIdNullable);
+                                                 @Param("viewerId") UUID viewerIdNullable,
+                                                 @Param("radiusMeters") double radiusMeters);
 }
