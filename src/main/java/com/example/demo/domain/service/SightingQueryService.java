@@ -47,8 +47,7 @@ public class SightingQueryService {
         // 1) lon/lat 우선
         if (lon != null || lat != null) {
             validateLonLat(lon, lat);
-            List<SightingAroundRow> rows =
-                    sightingRepository.findAroundByPoint(lon, lat, viewerIdNullable, r);
+            List<SightingAroundRow> rows = sightingRepository.findAroundByPoint(lon, lat, viewerIdNullable, r);
             return rows.stream().map(this::mapRow).toList();
         }
 

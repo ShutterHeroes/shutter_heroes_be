@@ -7,7 +7,7 @@ import java.time.LocalDateTime;
 import java.util.UUID;
 
 /**
- * 반경 500m 내 sighting 조회 결과 아이템
+ * 반경 radiusMeter(지도 확대 축소에 따라) 내 sighting 조회 결과 아이템
  * geom은 GeoJSON 문자열로 반환 (드라이버 의존성 없이 안전)
  */
 @Getter
