@@ -8,7 +8,6 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.locationtech.jts.geom.Point;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -60,9 +59,9 @@ public class SightingCreateResponse {
     private BigDecimal aiConfidence;
 
     /**
-     * GPS 위치 정보 (PostGIS Point - EXIF에서 추출)
+     * GPS 위치 정보 (위도, 경도)
      */
-    private Point gpsLocation;
+    private GpsLocation gpsLocation;
 
     /**
      * 촬영 시간 (EXIF DateTimeOriginal)
@@ -91,6 +90,18 @@ public class SightingCreateResponse {
      * - NOT_DETECTED: 동물이 인식되지 않음
      */
     private SpeciesProcessingStatus speciesProcessingStatus;
+
+    /**
+     * GPS 위치 정보 DTO
+     */
+    @Getter
+    @Builder
+    @NoArgsConstructor
+    @AllArgsConstructor
+    public static class GpsLocation {
+        private Double latitude;   // 위도 (Y)
+        private Double longitude;  // 경도 (X)
+    }
 
     /**
      * Media 정보 DTO
@@ -146,12 +157,21 @@ public class SightingCreateResponse {
             .extraInfo(media.getExtraInfo())      // EXIF 메타데이터 및 sanitizedUrl (JSONB)
             .build();
 
+        // GPS 위치 정보 변환 (PostGIS Point -> GpsLocation DTO)
+        GpsLocation gpsLocation = null;
+        if (sighting.getGeom() != null) {
+            gpsLocation = GpsLocation.builder()
+                .latitude(sighting.getGeom().getY())   // 위도
+                .longitude(sighting.getGeom().getX())  // 경도
+                .build();
+        }
+
         return SightingCreateResponse.builder()
             .sightingId(sighting.getId())
             .title(sighting.getTitle())
             .description(sighting.getDescription())
             .aiConfidence(sighting.getAiConfidence())
-            .gpsLocation(sighting.getGeom())
+            .gpsLocation(gpsLocation)
             .occurredAt(sighting.getOccurredAt())
             .createdAt(sighting.getCreatedAt())
             .media(mediaInfo)
