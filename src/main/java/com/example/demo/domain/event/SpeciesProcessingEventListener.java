@@ -6,10 +6,12 @@ import com.example.demo.domain.repository.SightingRepository;
 import com.example.demo.domain.service.SpeciesService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 
 /**
  * Species 정보 비동기 처리를 위한 이벤트 리스너
@@ -25,6 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
  * <p><b>비동기 처리 방식:</b></p>
  * <ul>
  *   <li>@Async 어노테이션으로 별도 스레드에서 실행</li>
+ *   <li>@TransactionalEventListener(AFTER_COMMIT)로 트랜잭션 커밋 후 실행</li>
  *   <li>speciesTaskExecutor 스레드풀 사용</li>
  *   <li>사용자 응답과 독립적으로 처리</li>
  * </ul>
@@ -43,6 +46,7 @@ public class SpeciesProcessingEventListener {
      * <p><b>처리 흐름:</b></p>
      * <ol>
      *   <li>이벤트 수신 (Vision API에서 인식한 동물 정보 포함)</li>
+     *   <li>트랜잭션 커밋 후 실행 (AFTER_COMMIT)</li>
      *   <li>학명 기반으로 Species 조회/생성 (OpenAI API 호출)</li>
      *   <li>Sighting 엔티티에 Species 연결</li>
      *   <li>DB 업데이트</li>
@@ -58,8 +62,8 @@ public class SpeciesProcessingEventListener {
      * @param event Species 처리 이벤트
      */
     @Async("speciesTaskExecutor")
-    @EventListener
-    @Transactional
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT)
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
     public void handleSpeciesProcessing(SpeciesProcessingEvent event) {
         log.info("Processing Species asynchronously for Sighting ID: {} (animalLabel: {}, scientificName: {})",
             event.getSightingId(), event.getAnimalLabel(), event.getScientificName());
