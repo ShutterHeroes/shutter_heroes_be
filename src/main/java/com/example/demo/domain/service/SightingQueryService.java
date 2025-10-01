@@ -16,44 +16,71 @@ import java.util.UUID;
 public class SightingQueryService {
 
     private static final double DEFAULT_RADIUS_M = 500.0;
-    private static final double MIN_RADIUS_M = 10.0;     // 너무 작으면 0 근처 오차 방지
-    private static final double MAX_RADIUS_M = 20000.0;  // 20km 상한 (필요 시 조정)
+    private static final double MIN_RADIUS_M = 10.0;
+    private static final double MAX_RADIUS_M = 20000.0;
 
     private final SightingRepository sightingRepository;
 
+    private double normalizeRadius(Double r) {
+        double v = (r == null) ? DEFAULT_RADIUS_M : r;
+        if (Double.isNaN(v) || Double.isInfinite(v)) v = DEFAULT_RADIUS_M;
+        if (v < MIN_RADIUS_M) v = MIN_RADIUS_M;
+        if (v > MAX_RADIUS_M) v = MAX_RADIUS_M;
+        return v;
+    }
+
+    private void validateLonLat(Double lon, Double lat) {
+        if (lon == null || lat == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "lon/lat are required");
+        }
+        if (lon < -180.0 || lon > 180.0 || lat < -90.0 || lat > 90.0) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "lon/lat out of range");
+        }
+    }
+
+    /** 기준 sightingId 기준 검색 */
     public List<SightingAroundItemDto> findAround(UUID centerSightingId, UUID viewerIdNullable, Double radiusMeters) {
         if (!sightingRepository.existsByIdInApp(centerSightingId)) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "center sighting not found");
         }
-
-        double r = (radiusMeters == null) ? DEFAULT_RADIUS_M : radiusMeters.doubleValue();
-        if (Double.isNaN(r) || Double.isInfinite(r)) r = DEFAULT_RADIUS_M;
-        if (r < MIN_RADIUS_M) r = MIN_RADIUS_M;
-        if (r > MAX_RADIUS_M) r = MAX_RADIUS_M;
+        double r = normalizeRadius(radiusMeters);
 
         List<SightingAroundRow> rows =
                 sightingRepository.findAroundBySighting(centerSightingId, viewerIdNullable, r);
 
-        return rows.stream()
-                .map(rw -> new SightingAroundItemDto(
-                        rw.getId(),
-                        rw.getDisplayName(),
-                        rw.getCommonNameKo(),
-                        rw.getCommonNameEn(),
-                        rw.getScientificName(),
-                        rw.getStatus(),
-                        rw.getStoragePath(),
-                        rw.getTitle(),
-                        rw.getDescription(),
-                        rw.getOccurredAt(),
-                        rw.getDetectedBy(),
-                        rw.getAiConfidence(),
-                        rw.getVisibility(),
-                        rw.getIsVerified(),
-                        rw.getGeom(),
-                        rw.getCreatedAt(),
-                        rw.getUpdatedAt()
-                ))
-                .toList();
+        return rows.stream().map(this::mapRow).toList();
+    }
+
+    /** 지도 중심 좌표 기준 검색 */
+    public List<SightingAroundItemDto> findAroundByPoint(Double lon, Double lat, UUID viewerIdNullable, Double radiusMeters) {
+        validateLonLat(lon, lat);
+        double r = normalizeRadius(radiusMeters);
+
+        List<SightingAroundRow> rows =
+                sightingRepository.findAroundByPoint(lon, lat, viewerIdNullable, r);
+
+        return rows.stream().map(this::mapRow).toList();
+    }
+
+    private SightingAroundItemDto mapRow(SightingAroundRow r) {
+        return new SightingAroundItemDto(
+                r.getId(),
+                r.getDisplayName(),
+                r.getCommonNameKo(),
+                r.getCommonNameEn(),
+                r.getScientificName(),
+                r.getStatus(),
+                r.getStoragePath(),
+                r.getTitle(),
+                r.getDescription(),
+                r.getOccurredAt(),
+                r.getDetectedBy(),
+                r.getAiConfidence(),
+                r.getVisibility(),
+                r.getIsVerified(),
+                r.getGeom(),
+                r.getCreatedAt(),
+                r.getUpdatedAt()
+        );
     }
 }
