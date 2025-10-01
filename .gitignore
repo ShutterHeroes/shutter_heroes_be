@@ -43,3 +43,8 @@ data/
 
 ### claude.ai ###
 .claude/
+
+### Sensitive Information ###
+# Secret properties containing API keys, passwords, etc.
+**/application-secret.properties
+**/application-secret-*.properties

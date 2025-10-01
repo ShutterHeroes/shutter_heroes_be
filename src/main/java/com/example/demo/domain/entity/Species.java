@@ -1,10 +1,12 @@
 package com.example.demo.domain.entity;
 
+import com.example.demo.domain.converter.SpeciesStatusConverter;
 import com.example.demo.domain.enums.SpeciesStatus;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnTransformer;
 import org.hibernate.annotations.UuidGenerator;
 
 import java.time.LocalDateTime;
@@ -32,9 +34,13 @@ public class Species {
     @Column(name = "scientific_name")
     private String scientificName;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    private SpeciesStatus status = SpeciesStatus.COMMON;
+    @Column(nullable = false, name = "status")
+    @ColumnTransformer(
+        read = "status::varchar",
+        write = "?::app.species_status"
+    )
+    @Convert(converter = SpeciesStatusConverter.class)
+    private SpeciesStatus status = SpeciesStatus.GENERAL;
 
     @Column(name = "protected_code")
     private String protectedCode;

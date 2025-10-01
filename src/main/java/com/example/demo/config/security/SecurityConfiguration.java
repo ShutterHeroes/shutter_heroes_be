@@ -74,6 +74,9 @@ public class SecurityConfiguration {
                     // 미디어 관리: 변경/삭제는 로그인 필요 관리자 전용으로 막고 싶다면 authenticated() 대신 hasRole("ADMIN")
                     auth.requestMatchers(HttpMethod.PATCH, "/api/v1/medias/*/visibility").authenticated();
                     auth.requestMatchers(HttpMethod.DELETE, "/api/v1/medias/*").authenticated();
+                    // AI 관련 API
+                    auth.requestMatchers(HttpMethod.POST, "/api/v1/ai/animal/description").authenticated();
+                    auth.requestMatchers(HttpMethod.GET, "/api/v1/ai/config").authenticated();
                     // Swagger UI 경로 허용 (기본 생성 문서)
                     auth.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**", "/favicon.ico").permitAll();
 
