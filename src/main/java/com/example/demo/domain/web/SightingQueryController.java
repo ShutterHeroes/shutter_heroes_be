@@ -24,44 +24,45 @@ public class SightingQueryController {
     private final SightingQueryService sightingQueryService;
 
     @Operation(
-        summary = "기준 sighting의 geom을 중심으로 반경 내 목록",
-        description = "비로그인/타인: public만, 로그인 사용자: public + 본인 private 포함",
+        summary = "반경 내 sighting 조회(통합)",
+        description = "lon/lat가 있으면 좌표 기준, 없으면 centerId 기준으로 500m(기본) 내 조회. " +
+                      "비로그인/타인: public만, 로그인: public + 본인 private 포함.",
         parameters = {
-            @Parameter(name = "sightingId", in = ParameterIn.PATH, required = true, description = "기준 sighting UUID"),
+            @Parameter(name = "centerId", in = ParameterIn.QUERY, required = false,
+                       description = "기준 sighting UUID (lon/lat 없을 때만 사용)",
+                       schema = @Schema(type = "string", format = "uuid")),
+            @Parameter(name = "lon", in = ParameterIn.QUERY, required = false,
+                       description = "경도(-180~180). 존재 시 좌표 기준을 우선 사용",
+                       schema = @Schema(type = "number", example = "126.9784")),
+            @Parameter(name = "lat", in = ParameterIn.QUERY, required = false,
+                       description = "위도(-90~90). 존재 시 좌표 기준을 우선 사용",
+                       schema = @Schema(type = "number", example = "37.5667")),
             @Parameter(name = "radiusMeters", in = ParameterIn.QUERY, required = false,
-                       description = "반경(미터). 기본 500m", schema = @Schema(type = "number", example = "500"))
-        }
-    )
-    @GetMapping("/{sightingId}/nearby")
-    public List<SightingAroundItemDto> findNearbyBySighting(
-            @PathVariable("sightingId") UUID sightingId,
-            @AuthenticationPrincipal UserPrincipal principal,
-            @RequestParam(name = "radiusMeters", required = false) Double radiusMeters
-    ) {
-        UUID viewer = (principal != null) ? principal.getId() : null;
-        return sightingQueryService.findAround(sightingId, viewer, radiusMeters);
-    }
-
-    @Operation(
-        summary = "지도 중심 좌표(lon, lat)를 기준으로 반경 내 목록",
-        description = "비로그인/타인: public만, 로그인 사용자: public + 본인 private 포함",
-        parameters = {
-            @Parameter(name = "lon", in = ParameterIn.QUERY, required = true,
-                       description = "경도(-180~180)", schema = @Schema(type = "number", example = "126.9784")),
-            @Parameter(name = "lat", in = ParameterIn.QUERY, required = true,
-                       description = "위도(-90~90)", schema = @Schema(type = "number", example = "37.5667")),
-            @Parameter(name = "radiusMeters", in = ParameterIn.QUERY, required = false,
-                       description = "반경(미터). 기본 500m", schema = @Schema(type = "number", example = "500"))
+                       description = "반경(미터). 기본 500m",
+                       schema = @Schema(type = "number", example = "500"))
         }
     )
     @GetMapping("/nearby")
-    public List<SightingAroundItemDto> findNearbyByPoint(
-            @RequestParam("lon") Double lon,
-            @RequestParam("lat") Double lat,
-            @AuthenticationPrincipal UserPrincipal principal,
-            @RequestParam(name = "radiusMeters", required = false) Double radiusMeters
+    public List<SightingAroundItemDto> findNearbyUnified(
+            @RequestParam(name = "centerId", required = false) UUID centerId,
+            @RequestParam(name = "lon", required = false) Double lon,
+            @RequestParam(name = "lat", required = false) Double lat,
+            @RequestParam(name = "radiusMeters", required = false) Double radiusMeters,
+            @AuthenticationPrincipal UserPrincipal principal
     ) {
         UUID viewer = (principal != null) ? principal.getId() : null;
-        return sightingQueryService.findAroundByPoint(lon, lat, viewer, radiusMeters);
+        return sightingQueryService.findNearbyUnified(centerId, lon, lat, viewer, radiusMeters);
+    }
+
+    /** (선택) 이전 엔드포인트 유지 시, 통합 로직을 그대로 위임. 필요 없으면 삭제해도 됩니다. */
+    @Deprecated
+    @GetMapping("/{sightingId}/nearby")
+    public List<SightingAroundItemDto> findNearbyBySightingDeprecated(
+            @PathVariable("sightingId") UUID sightingId,
+            @RequestParam(name = "radiusMeters", required = false) Double radiusMeters,
+            @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        UUID viewer = (principal != null) ? principal.getId() : null;
+        return sightingQueryService.findNearbyUnified(sightingId, null, null, viewer, radiusMeters);
     }
 }
