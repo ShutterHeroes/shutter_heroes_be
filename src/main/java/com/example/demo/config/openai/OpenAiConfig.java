@@ -25,7 +25,8 @@ public class OpenAiConfig {
 
     private String apiKey;
     private String apiUrl;
-    private String model;
+    private String model;           // 텍스트 전용 모델 (gpt-4.1-mini)
+    private String visionModel;     // Vision API 전용 모델 (gpt-4o)
 
     @Bean
     public WebClient openAiWebClient() {

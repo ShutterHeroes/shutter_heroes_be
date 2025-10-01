@@ -239,4 +239,161 @@ public class OpenAiService {
             throw new SpeciesException(SpeciesErrorCode.FAILED_TO_PARSE_OPENAI_RESPONSE);
         }
     }
+
+    /**
+     * 일반 동물 명칭(영문명)을 학명으로 변환합니다.
+     *
+     * <p>Vision API는 일반 명칭(예: "Cat", "Dog")만 반환하므로,
+     * OpenAI를 사용하여 해당 동물의 정확한 학명을 조회합니다.</p>
+     *
+     * <p>동작 방식:</p>
+     * <ol>
+     *   <li>일반 명칭을 OpenAI에 전송</li>
+     *   <li>OpenAI가 해당 동물의 학명을 반환 (예: "Cat" → "Felis catus")</li>
+     *   <li>학명이 존재하지 않거나 불명확한 경우 null 반환</li>
+     * </ol>
+     *
+     * @param commonName 일반 동물 명칭 (예: "Cat", "Dog", "Elephant")
+     * @return 학명 (예: "Felis catus"), 찾을 수 없으면 null
+     */
+    public Mono<String> getScientificNameFromCommonName(String commonName) {
+        log.info("Requesting scientific name for common name: {}", commonName);
+
+        // 입력값 검증
+        if (!StringUtils.hasText(commonName)) {
+            log.warn("Empty common name provided");
+            return Mono.empty();
+        }
+
+        String sanitizedName = commonName.trim();
+
+        // 프롬프트 생성
+        String prompt = String.format("""
+            <동물명>%s</동물명>
+
+            위 동물의 학명(scientific name)을 반환하세요.
+
+            [규칙]
+            1. 학명만 반환하세요 (예: "Felis catus")
+            2. 설명이나 추가 정보 없이 학명만 반환
+            3. 해당 동물이 여러 종을 포함하는 경우, 가장 일반적인 종의 학명 반환
+            4. 동물명이 불명확하거나 존재하지 않는 경우, "해당 없음" 반환
+            """, sanitizedName);
+
+        List<ChatMessage> messages = Arrays.asList(
+            ChatMessage.system("당신은 동물학 전문가입니다. 동물의 일반 명칭을 학명으로 정확하게 변환합니다."),
+            ChatMessage.user(prompt)
+        );
+
+        ChatCompletionRequest request = ChatCompletionRequest.of(
+            openAiConfig.getModel(),
+            messages,
+            null,
+            null
+        );
+
+        return chatCompletion(request)
+            .map(ChatCompletionResponse::getContent)
+            .map(String::trim)
+            .map(scientificName -> {
+                // "해당 없음" 또는 유사한 응답은 null로 처리
+                if (scientificName.equalsIgnoreCase("해당 없음") ||
+                    scientificName.equalsIgnoreCase("없음") ||
+                    scientificName.toLowerCase().contains("not found") ||
+                    scientificName.toLowerCase().contains("unknown")) {
+                    log.info("No scientific name found for: {}", commonName);
+                    return null;
+                }
+                log.info("Scientific name found: {} → {}", commonName, scientificName);
+                return scientificName;
+            })
+            .onErrorResume(error -> {
+                log.error("Failed to get scientific name for {}: {}", commonName, error.getMessage());
+                return Mono.empty();
+            });
+    }
+
+    /**
+     * 이미지를 분석하여 동물들의 학명과 일반 명칭을 배열로 반환합니다. (GPT-4o Vision API)
+     *
+     * <p>동작 방식:</p>
+     * <ol>
+     *   <li>이미지를 Base64로 인코딩</li>
+     *   <li>GPT-4o Vision API에 이미지와 질문 전송</li>
+     *   <li>응답: JSON 배열 형식 { "animals": [{ "label": "...", "scientificName": "...", "confidence": 0.95 }, ...] }</li>
+     * </ol>
+     *
+     * @param imageFile 분석할 이미지 파일
+     * @param maxResults 최대 반환할 동물 개수 (null이면 기본값 10)
+     * @return JSON 문자열 (animals 배열)
+     */
+    public Mono<String> analyzeAnimalImage(org.springframework.web.multipart.MultipartFile imageFile, Integer maxResults) {
+        log.info("Analyzing animal image with GPT-4o Vision API: {} (maxResults: {})",
+            imageFile.getOriginalFilename(), maxResults);
+
+        try {
+            // 1. 이미지를 Base64로 인코딩
+            byte[] imageBytes = imageFile.getBytes();
+            String base64Image = "data:image/jpeg;base64," + java.util.Base64.getEncoder().encodeToString(imageBytes);
+
+            // 2. maxResults 기본값 설정
+            int maxCount = maxResults != null ? maxResults : 10;
+
+            // 3. Vision API 프롬프트 생성
+            String prompt = String.format("""
+                이 이미지에 있는 모든 동물을 분석하여 다음 JSON 형식으로 반환하세요:
+
+                {
+                  "animals": [
+                    {
+                      "label": "동물의 일반 명칭 (영문, 예: Cat, Dog, Bengal Tiger)",
+                      "scientificName": "동물의 학명 (예: Felis catus)",
+                      "confidence": 0.95
+                    },
+                    {
+                      "label": "두 번째 동물",
+                      "scientificName": "두 번째 동물의 학명",
+                      "confidence": 0.88
+                    }
+                  ]
+                }
+
+                [규칙]
+                1. JSON 형식만 반환 (마크다운 코드 블록 없이)
+                2. 이미지에 있는 모든 동물을 배열로 반환 (최대 %d개)
+                3. label은 가능한 한 구체적으로 (예: "Cat"보다 "Bengal Cat" 선호)
+                4. scientificName은 정확한 학명 (속명 + 종명)
+                5. confidence는 인식 신뢰도 (0.0 ~ 1.0)
+                6. 신뢰도가 높은 순서로 정렬
+                7. 동물이 없으면 빈 배열 반환: { "animals": [] }
+                8. 같은 종류의 동물이 여러 마리 있어도 각각 별도 항목으로 반환
+                9. 부분적으로만 보이는 동물도 인식 가능하면 포함
+                """, maxCount);
+
+            // 4. Vision API 메시지 생성
+            List<ChatMessage> messages = Arrays.asList(
+                ChatMessage.system("당신은 동물 인식 전문가입니다. 이미지를 분석하여 모든 동물의 종과 학명을 정확하게 식별합니다."),
+                ChatMessage.userWithImage(prompt, base64Image)
+            );
+
+            // 5. Vision API 요청 (gpt-4o 사용)
+            ChatCompletionRequest request = ChatCompletionRequest.of(
+                openAiConfig.getVisionModel(),  // gpt-4o
+                messages,
+                null,
+                null
+            );
+
+            // 6. API 호출 및 응답 처리
+            return chatCompletion(request)
+                .map(ChatCompletionResponse::getContent)
+                .map(this::cleanJsonResponse)
+                .doOnSuccess(response -> log.info("Vision API analysis completed for: {}", imageFile.getOriginalFilename()))
+                .doOnError(error -> log.error("Vision API analysis failed for {}: {}", imageFile.getOriginalFilename(), error.getMessage()));
+
+        } catch (Exception e) {
+            log.error("Failed to process image file: {}", e.getMessage());
+            return Mono.error(new AiException(AiErrorCode.IMAGE_PROCESSING_ERROR));
+        }
+    }
 }
