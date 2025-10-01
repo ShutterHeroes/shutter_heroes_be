@@ -1,11 +1,14 @@
 package com.example.demo.domain.entity;
 
+import com.example.demo.domain.converter.DetectedByConverter;
+import com.example.demo.domain.converter.VisibilityConverter;
 import com.example.demo.domain.enums.DetectedBy;
 import com.example.demo.domain.enums.Visibility;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.ColumnTransformer;
 import org.hibernate.annotations.UuidGenerator;
 import org.locationtech.jts.geom.Point;
 
@@ -47,15 +50,23 @@ public class Sighting {
     @Column(name = "occurred_at")
     private LocalDateTime occurredAt;
 
-    @Enumerated(EnumType.STRING)
     @Column(name = "detected_by", nullable = false)
+    @ColumnTransformer(
+        read = "detected_by::varchar",
+        write = "?::app.detected_by"
+    )
+    @Convert(converter = DetectedByConverter.class)
     private DetectedBy detectedBy = DetectedBy.USER;
 
     @Column(name = "ai_confidence")
     private BigDecimal aiConfidence;
 
-    @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    @ColumnTransformer(
+        read = "visibility::varchar",
+        write = "?::app.visibility"
+    )
+    @Convert(converter = VisibilityConverter.class)
     private Visibility visibility = Visibility.PUBLIC;
 
     @Column(name = "is_verified", nullable = false)
