@@ -53,6 +53,7 @@ public class SightingService {
     private final AnimalVisionService animalVisionService;
     private final S3Service s3Service;
     private final ExifService exifService;
+    private final ExifRemovalService exifRemovalService;
     private final ApplicationEventPublisher eventPublisher;
 
     /**
@@ -60,10 +61,11 @@ public class SightingService {
      *
      * <p><b>동작 방식:</b></p>
      * <ol>
-     *   <li>S3에 이미지 업로드</li>
      *   <li>EXIF 메타데이터 추출 (GPS, 촬영시간, 카메라정보)</li>
+     *   <li>EXIF 제거 이미지 생성</li>
+     *   <li>S3에 두 버전 업로드 (원본 + EXIF 제거)</li>
      *   <li>Vision API로 동물 인식 (가장 신뢰도 높은 동물 선택)</li>
-     *   <li>Media 엔티티 생성 및 저장</li>
+     *   <li>Media 엔티티 생성 및 저장 (extra_info JSONB에 EXIF 저장)</li>
      *   <li>Sighting 엔티티 생성 및 저장 (EXIF 데이터 반영)</li>
      *   <li>사용자에게 즉시 응답 (speciesProcessingStatus: PENDING)</li>
      *   <li>SpeciesProcessingEvent 발행 → 백그라운드에서 Species 생성</li>
@@ -84,11 +86,7 @@ public class SightingService {
     ) {
         log.info("Creating Sighting for user: {} with image: {}", user.getEmail(), imageFile.getOriginalFilename());
 
-        // 1. S3에 이미지 업로드
-        String s3Url = s3Service.uploadImage(imageFile);
-        log.info("Image uploaded to S3: {}", s3Url);
-
-        // 2. EXIF 메타데이터 추출
+        // 1. EXIF 메타데이터 추출
         ExifMetadata exifMetadata = exifService.extractMetadata(imageFile);
         log.info("EXIF metadata extracted: GPS={}, capturedAt={}, camera={} {}",
             exifMetadata.getGpsLocation() != null,
@@ -96,11 +94,20 @@ public class SightingService {
             exifMetadata.getCameraMake(),
             exifMetadata.getCameraModel());
 
-        // 3. Vision API로 동물 인식 (신뢰도 0.5 이상, 최대 5개)
+        // 2. EXIF 제거 이미지 생성
+        byte[] sanitizedImageBytes = exifRemovalService.removeExifMetadata(imageFile);
+        log.info("EXIF removed from image, sanitized size: {} bytes", sanitizedImageBytes.length);
+
+        // 3. S3에 두 버전 업로드 (원본 + EXIF 제거)
+        S3Service.ImageUploadResult uploadResult = s3Service.uploadBothVersions(imageFile, sanitizedImageBytes);
+        log.info("Images uploaded to S3 - Original: {}, Sanitized: {}",
+            uploadResult.getOriginalUrl(), uploadResult.getSanitizedUrl());
+
+        // 4. Vision API로 동물 인식 (신뢰도 0.5 이상, 최대 5개)
         List<AnimalDetection> detections = animalVisionService.detectAnimals(imageFile, 0.5f, 5);
 
-        // 4. Media 엔티티 생성 및 저장
-        Media media = createMediaEntity(user, imageFile, s3Url, exifMetadata);
+        // 5. Media 엔티티 생성 및 저장
+        Media media = createMediaEntity(user, imageFile, uploadResult, exifMetadata);
 
         if (detections.isEmpty()) {
             log.warn("No animals detected in image: {}", imageFile.getOriginalFilename());
@@ -109,12 +116,12 @@ public class SightingService {
             return SightingCreateResult.of(sighting, media, detections, false);
         }
 
-        // 5. 가장 신뢰도 높은 동물 선택 (이미 신뢰도 순으로 정렬됨)
+        // 6. 가장 신뢰도 높은 동물 선택 (이미 신뢰도 순으로 정렬됨)
         AnimalDetection topDetection = detections.get(0);
         log.info("Top detection: {} (confidence: {}, scientificName: {})",
             topDetection.getLabel(), topDetection.getConfidence(), topDetection.getScientificName());
 
-        // 6. Sighting 엔티티 생성 및 저장
+        // 7. Sighting 엔티티 생성 및 저장
         Sighting sighting = createSightingEntity(
             user,
             media,
@@ -125,7 +132,7 @@ public class SightingService {
             topDetection.getConfidence()
         );
 
-        // 7. Species 처리 이벤트 발행 (비동기 처리)
+        // 8. Species 처리 이벤트 발행 (비동기 처리)
         if (topDetection.getScientificName() != null && !topDetection.getScientificName().isEmpty()) {
             publishSpeciesProcessingEvent(sighting, topDetection);
             log.info("Species processing event published for Sighting ID: {}", sighting.getId());
@@ -133,7 +140,7 @@ public class SightingService {
             log.warn("No scientific name found for detection: {}. Skipping Species processing.", topDetection.getLabel());
         }
 
-        // 8. 사용자에게 즉시 응답 반환 (Species 처리는 백그라운드)
+        // 9. 사용자에게 즉시 응답 반환 (Species 처리는 백그라운드)
         return SightingCreateResult.of(sighting, media, detections, true);
     }
 
@@ -142,29 +149,50 @@ public class SightingService {
      *
      * @param user 사용자
      * @param imageFile 이미지 파일
-     * @param s3Url S3 URL
+     * @param uploadResult S3 업로드 결과 (원본 URL, 공개 URL)
      * @param exifMetadata EXIF 메타데이터
      * @return 저장된 Media 엔티티
      */
     private Media createMediaEntity(
         User user,
         MultipartFile imageFile,
-        String s3Url,
+        S3Service.ImageUploadResult uploadResult,
         ExifMetadata exifMetadata
     ) {
         Media media = new Media();
         media.setUser(user);
-        media.setStoragePath(s3Url);
+        media.setStoragePath(uploadResult.getOriginalUrl());      // 원본 이미지 (EXIF 포함)
         media.setMimeType(imageFile.getContentType());
         media.setBytes(imageFile.getSize());
         media.setWidth(exifMetadata.getWidth());
         media.setHeight(exifMetadata.getHeight());
-        media.setCameraMake(exifMetadata.getCameraMake());
-        media.setCameraModel(exifMetadata.getCameraModel());
-        media.setCapturedAt(exifMetadata.getCapturedAt());
+
+        // EXIF 메타데이터 및 공개 URL을 extra_info JSONB에 저장
+        java.util.Map<String, Object> extraInfo = new java.util.HashMap<>();
+
+        // 공개 이미지 URL (EXIF 제거됨) - 원본 URL과 다른 파일명으로 보안 강화
+        extraInfo.put("sanitizedUrl", uploadResult.getSanitizedUrl());
+
+        // EXIF 메타데이터
+        if (exifMetadata.getCameraMake() != null) {
+            extraInfo.put("cameraMake", exifMetadata.getCameraMake());
+        }
+        if (exifMetadata.getCameraModel() != null) {
+            extraInfo.put("cameraModel", exifMetadata.getCameraModel());
+        }
+        if (exifMetadata.getCapturedAt() != null) {
+            extraInfo.put("capturedAt", exifMetadata.getCapturedAt().toString());
+        }
+        if (exifMetadata.getGpsLocation() != null) {
+            extraInfo.put("gpsLatitude", exifMetadata.getGpsLocation().getY());
+            extraInfo.put("gpsLongitude", exifMetadata.getGpsLocation().getX());
+        }
+
+        media.setExtraInfo(extraInfo);
 
         Media saved = mediaRepository.save(media);
-        log.info("Media created with ID: {} for user: {}", saved.getId(), user.getEmail());
+        log.info("Media created with ID: {} for user: {} (original: {}, sanitized: {})",
+            saved.getId(), user.getEmail(), uploadResult.getOriginalUrl(), uploadResult.getSanitizedUrl());
 
         return saved;
     }

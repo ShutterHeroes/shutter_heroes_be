@@ -4,9 +4,12 @@ import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UuidGenerator;
+import org.hibernate.type.SqlTypes;
 
 import java.time.LocalDateTime;
+import java.util.Map;
 import java.util.UUID;
 
 /**
@@ -14,10 +17,22 @@ import java.util.UUID;
  *
  * <p><b>저장 정보:</b></p>
  * <ul>
- *   <li>S3 저장 경로 (storagePath)</li>
+ *   <li>S3 원본 이미지 경로 (storagePath) - EXIF 포함, 관리자/분석용</li>
  *   <li>이미지 크기 (width, height, bytes)</li>
- *   <li>EXIF 메타데이터 (cameraMake, cameraModel, capturedAt)</li>
+ *   <li>EXIF 메타데이터 및 공개 URL (extra_info JSONB 컬럼에 저장)</li>
  * </ul>
+ *
+ * <p><b>extra_info JSONB 구조:</b></p>
+ * <pre>
+ * {
+ *   "sanitizedUrl": "https://...sanitized/random123_file.jpg",  // 공개 이미지 URL (EXIF 제거)
+ *   "cameraMake": "Apple",
+ *   "cameraModel": "iPhone 14 Pro",
+ *   "capturedAt": "2025-01-15T14:30:00",
+ *   "gpsLatitude": 37.5665,
+ *   "gpsLongitude": 126.9780
+ * }
+ * </pre>
  */
 @Entity
 @Table(name = "media")
@@ -36,6 +51,11 @@ public class Media {
     @JoinColumn(name = "user_id", nullable = false)
     private User user;
 
+    /**
+     * S3 원본 이미지 경로 (EXIF 메타데이터 포함)
+     * <p>관리자 및 분석용으로만 사용</p>
+     * <p>공개 이미지 URL은 extra_info.sanitizedUrl에 저장</p>
+     */
     @Column(name = "storage_path", nullable = false, columnDefinition = "TEXT")
     private String storagePath;
 
@@ -55,22 +75,12 @@ public class Media {
     private String checksum;
 
     /**
-     * EXIF: 카메라 제조사 (예: Apple, Samsung, Canon)
+     * EXIF 메타데이터 및 기타 정보 (JSONB)
+     * <p>구조: { sanitizedUrl, cameraMake, cameraModel, capturedAt, gpsLatitude, gpsLongitude }</p>
      */
-    @Column(name = "camera_make", columnDefinition = "TEXT")
-    private String cameraMake;
-
-    /**
-     * EXIF: 카메라 모델 (예: iPhone 14 Pro, Galaxy S23)
-     */
-    @Column(name = "camera_model", columnDefinition = "TEXT")
-    private String cameraModel;
-
-    /**
-     * EXIF: 촬영 시간 (DateTimeOriginal)
-     */
-    @Column(name = "captured_at")
-    private LocalDateTime capturedAt;
+    @JdbcTypeCode(SqlTypes.JSON)
+    @Column(name = "extra_info", columnDefinition = "jsonb")
+    private Map<String, Object> extraInfo;
 
     @Column(name = "created_at", nullable = false, updatable = false)
     private LocalDateTime createdAt;

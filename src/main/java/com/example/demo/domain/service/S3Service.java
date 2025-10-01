@@ -22,7 +22,8 @@ import java.util.UUID;
  *
  * <p><b>주요 기능:</b></p>
  * <ul>
- *   <li>이미지 파일 S3 업로드</li>
+ *   <li>원본 이미지 S3 업로드 (EXIF 포함)</li>
+ *   <li>공개 이미지 S3 업로드 (EXIF 제거)</li>
  *   <li>고유한 파일명 생성 (UUID + timestamp)</li>
  *   <li>S3 URL 반환</li>
  *   <li>파일 삭제</li>
@@ -30,8 +31,9 @@ import java.util.UUID;
  *
  * <p><b>파일 경로 구조:</b></p>
  * <ul>
- *   <li>sightings/{year}/{month}/{uuid}_{timestamp}_{originalFilename}</li>
- *   <li>예: sightings/2025/01/abc123_20250101120000_cat.jpg</li>
+ *   <li>원본: sightings/{year}/{month}/original/{uuid}_{timestamp}_{originalFilename}</li>
+ *   <li>공개: sightings/{year}/{month}/sanitized/{uuid}_{timestamp}_{originalFilename}</li>
+ *   <li>예: sightings/2025/01/original/abc123_20250101120000_cat.jpg</li>
  * </ul>
  */
 @Slf4j
@@ -43,47 +45,79 @@ public class S3Service {
     private final S3Config s3Config;
 
     /**
-     * 이미지 파일을 S3에 업로드하고 URL을 반환합니다.
+     * 이미지 업로드 결과를 담는 내부 클래스
+     */
+    @lombok.Value(staticConstructor = "of")
+    public static class ImageUploadResult {
+        String originalUrl;     // 원본 이미지 URL (EXIF 포함)
+        String sanitizedUrl;    // 공개 이미지 URL (EXIF 제거)
+    }
+
+    /**
+     * 원본 이미지와 EXIF 제거 이미지를 S3에 업로드합니다.
      *
      * <p><b>업로드 프로세스:</b></p>
      * <ol>
-     *   <li>고유한 파일명 생성 (UUID + timestamp)</li>
-     *   <li>S3 경로 생성 (sightings/yyyy/MM/)</li>
-     *   <li>S3에 파일 업로드</li>
-     *   <li>공개 URL 반환</li>
+     *   <li>원본 이미지 업로드 (EXIF 포함) → original/ 폴더</li>
+     *   <li>EXIF 제거 이미지 업로드 → sanitized/ 폴더 (다른 파일명으로 보안 강화)</li>
+     *   <li>두 URL 반환</li>
      * </ol>
      *
-     * @param file 업로드할 이미지 파일
-     * @return S3 파일 URL
+     * <p><b>보안 강화:</b></p>
+     * <ul>
+     *   <li>원본 파일명: uuid1_timestamp_original.jpg</li>
+     *   <li>공개 파일명: uuid2_timestamp_sanitized.jpg (다른 UUID 사용)</li>
+     *   <li>공개 URL로 원본 URL 추측 불가능</li>
+     * </ul>
+     *
+     * @param originalFile 원본 이미지 파일 (EXIF 포함)
+     * @param sanitizedBytes EXIF 제거된 이미지 바이트 배열
+     * @return ImageUploadResult (원본 URL, 공개 URL)
      * @throws FileException 파일 업로드 실패 시
      */
-    public String uploadImage(MultipartFile file) {
+    public ImageUploadResult uploadBothVersions(MultipartFile originalFile, byte[] sanitizedBytes) {
         try {
-            // 1. 고유한 파일명 생성
-            String fileName = generateUniqueFileName(file.getOriginalFilename());
+            // 1. 원본 파일명 생성
+            String originalFileName = generateUniqueFileName(originalFile.getOriginalFilename());
 
-            // 2. S3 경로 생성 (sightings/yyyy/MM/)
-            String s3Key = buildS3Key(fileName);
+            // 2. 공개 파일명 생성 (다른 UUID 사용으로 원본과 연관성 제거)
+            String sanitizedFileName = generateUniqueFileName(originalFile.getOriginalFilename());
 
-            // 3. S3에 파일 업로드
-            PutObjectRequest putObjectRequest = PutObjectRequest.builder()
-                .bucket(s3Config.getBucketName())
-                .key(s3Key)
-                .contentType(file.getContentType())
-                .build();
+            // 3. 원본 이미지 업로드 (EXIF 포함)
+            String originalS3Key = buildS3Key(originalFileName, "original");
+            uploadToS3(originalS3Key, originalFile.getBytes(), originalFile.getContentType());
+            String originalUrl = buildPublicUrl(originalS3Key);
+            log.info("Original image uploaded to S3: {}", originalUrl);
 
-            s3Client.putObject(putObjectRequest, RequestBody.fromBytes(file.getBytes()));
+            // 4. 공개 이미지 업로드 (EXIF 제거, 다른 파일명)
+            String sanitizedS3Key = buildS3Key(sanitizedFileName, "sanitized");
+            uploadToS3(sanitizedS3Key, sanitizedBytes, originalFile.getContentType());
+            String sanitizedUrl = buildPublicUrl(sanitizedS3Key);
+            log.info("Sanitized image uploaded to S3: {} (different filename for security)", sanitizedUrl);
 
-            // 4. 공개 URL 반환
-            String fileUrl = buildPublicUrl(s3Key);
-            log.info("File uploaded successfully to S3: {}", fileUrl);
-
-            return fileUrl;
+            return ImageUploadResult.of(originalUrl, sanitizedUrl);
 
         } catch (IOException e) {
             log.error("Failed to upload file to S3: {}", e.getMessage(), e);
             throw new FileException(FileErrorCode.FILE_UPLOAD_FAILED);
         }
+    }
+
+    /**
+     * S3에 파일 업로드 (내부 메서드)
+     *
+     * @param s3Key S3 key
+     * @param fileBytes 파일 바이트 배열
+     * @param contentType 콘텐츠 타입
+     */
+    private void uploadToS3(String s3Key, byte[] fileBytes, String contentType) {
+        PutObjectRequest putObjectRequest = PutObjectRequest.builder()
+            .bucket(s3Config.getBucketName())
+            .key(s3Key)
+            .contentType(contentType)
+            .build();
+
+        s3Client.putObject(putObjectRequest, RequestBody.fromBytes(fileBytes));
     }
 
     /**
@@ -125,16 +159,17 @@ public class S3Service {
 
     /**
      * S3 key 생성
-     * 형식: sightings/{year}/{month}/{filename}
+     * 형식: sightings/{year}/{month}/{type}/{filename}
      *
      * @param fileName 파일명
+     * @param type 이미지 타입 (original 또는 sanitized)
      * @return S3 key
      */
-    private String buildS3Key(String fileName) {
+    private String buildS3Key(String fileName, String type) {
         LocalDateTime now = LocalDateTime.now();
         String year = String.valueOf(now.getYear());
         String month = String.format("%02d", now.getMonthValue());
-        return String.format("sightings/%s/%s/%s", year, month, fileName);
+        return String.format("sightings/%s/%s/%s/%s", year, month, type, fileName);
     }
 
     /**

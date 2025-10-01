@@ -101,14 +101,13 @@ public class SightingCreateResponse {
     @AllArgsConstructor
     public static class MediaInfo {
         private UUID mediaId;
-        private String url;
+        private String url;                     // 공개 이미지 URL (EXIF 제거됨)
+        private String originalUrl;             // 원본 이미지 URL (EXIF 포함, 관리자용)
         private String mimeType;
         private Integer width;
         private Integer height;
         private Long bytes;
-        private String cameraMake;
-        private String cameraModel;
-        private LocalDateTime capturedAt;
+        private java.util.Map<String, Object> extraInfo;  // EXIF 메타데이터 (JSONB)
     }
 
     /**
@@ -130,16 +129,21 @@ public class SightingCreateResponse {
             status = SpeciesProcessingStatus.NOT_DETECTED;
         }
 
+        // extra_info에서 sanitizedUrl 추출
+        String sanitizedUrl = null;
+        if (media.getExtraInfo() != null && media.getExtraInfo().containsKey("sanitizedUrl")) {
+            sanitizedUrl = (String) media.getExtraInfo().get("sanitizedUrl");
+        }
+
         MediaInfo mediaInfo = MediaInfo.builder()
             .mediaId(media.getId())
-            .url(media.getStoragePath())
+            .url(sanitizedUrl)                    // 공개 이미지 URL (EXIF 제거, extra_info에서 추출)
+            .originalUrl(media.getStoragePath())  // 원본 이미지 URL (EXIF 포함)
             .mimeType(media.getMimeType())
             .width(media.getWidth())
             .height(media.getHeight())
             .bytes(media.getBytes())
-            .cameraMake(media.getCameraMake())
-            .cameraModel(media.getCameraModel())
-            .capturedAt(media.getCapturedAt())
+            .extraInfo(media.getExtraInfo())      // EXIF 메타데이터 및 sanitizedUrl (JSONB)
             .build();
 
         return SightingCreateResponse.builder()
