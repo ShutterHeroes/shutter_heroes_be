@@ -53,16 +53,4 @@ public class SightingQueryController {
         UUID viewer = (principal != null) ? principal.getId() : null;
         return sightingQueryService.findNearbyUnified(centerId, lon, lat, viewer, radiusMeters);
     }
-
-    /** (선택) 이전 엔드포인트 유지 시, 통합 로직을 그대로 위임. 필요 없으면 삭제해도 됩니다. */
-    @Deprecated
-    @GetMapping("/{sightingId}/nearby")
-    public List<SightingAroundItemDto> findNearbyBySightingDeprecated(
-            @PathVariable("sightingId") UUID sightingId,
-            @RequestParam(name = "radiusMeters", required = false) Double radiusMeters,
-            @AuthenticationPrincipal UserPrincipal principal
-    ) {
-        UUID viewer = (principal != null) ? principal.getId() : null;
-        return sightingQueryService.findNearbyUnified(sightingId, null, null, viewer, radiusMeters);
-    }
 }
