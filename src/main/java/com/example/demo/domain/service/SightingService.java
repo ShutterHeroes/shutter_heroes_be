@@ -2,12 +2,14 @@ package com.example.demo.domain.service;
 
 import com.example.demo.domain.dto.exif.ExifMetadata;
 import com.example.demo.domain.dto.vision.AnimalDetection;
+import com.example.demo.domain.entity.AiDetection;
 import com.example.demo.domain.entity.Media;
 import com.example.demo.domain.entity.Sighting;
 import com.example.demo.domain.entity.User;
 import com.example.demo.domain.enums.DetectedBy;
 import com.example.demo.domain.enums.Visibility;
 import com.example.demo.domain.event.SpeciesProcessingEvent;
+import com.example.demo.domain.repository.AiDetectionRepository;
 import com.example.demo.domain.repository.MediaRepository;
 import com.example.demo.domain.repository.SightingRepository;
 import lombok.RequiredArgsConstructor;
@@ -50,6 +52,7 @@ public class SightingService {
 
     private final SightingRepository sightingRepository;
     private final MediaRepository mediaRepository;
+    private final AiDetectionRepository aiDetectionRepository;
     private final AnimalVisionService animalVisionService;
     private final S3Service s3Service;
     private final ExifService exifService;
@@ -109,6 +112,9 @@ public class SightingService {
         // 5. Media 엔티티 생성 및 저장
         Media media = createMediaEntity(user, imageFile, uploadResult, exifMetadata);
 
+        // 6. AiDetection 엔티티 저장 (모든 감지 결과 저장)
+        saveAiDetections(media, detections);
+
         if (detections.isEmpty()) {
             log.warn("No animals detected in image: {}", imageFile.getOriginalFilename());
             // 동물이 인식되지 않은 경우에도 Sighting 생성 (Species 없음)
@@ -116,12 +122,12 @@ public class SightingService {
             return SightingCreateResult.of(sighting, media, detections, false);
         }
 
-        // 6. 가장 신뢰도 높은 동물 선택 (이미 신뢰도 순으로 정렬됨)
+        // 7. 가장 신뢰도 높은 동물 선택 (이미 신뢰도 순으로 정렬됨)
         AnimalDetection topDetection = detections.get(0);
         log.info("Top detection: {} (confidence: {}, scientificName: {})",
             topDetection.getLabel(), topDetection.getConfidence(), topDetection.getScientificName());
 
-        // 7. Sighting 엔티티 생성 및 저장
+        // 8. Sighting 엔티티 생성 및 저장
         Sighting sighting = createSightingEntity(
             user,
             media,
@@ -132,7 +138,7 @@ public class SightingService {
             topDetection.getConfidence()
         );
 
-        // 8. Species 처리 이벤트 발행 (비동기 처리)
+        // 9. Species 처리 이벤트 발행 (비동기 처리)
         if (topDetection.getScientificName() != null && !topDetection.getScientificName().isEmpty()) {
             publishSpeciesProcessingEvent(sighting, topDetection);
             log.info("Species processing event published for Sighting ID: {}", sighting.getId());
@@ -140,7 +146,7 @@ public class SightingService {
             log.warn("No scientific name found for detection: {}. Skipping Species processing.", topDetection.getLabel());
         }
 
-        // 9. 사용자에게 즉시 응답 반환 (Species 처리는 백그라운드)
+        // 10. 사용자에게 즉시 응답 반환 (Species 처리는 백그라운드)
         return SightingCreateResult.of(sighting, media, detections, true);
     }
 
@@ -244,6 +250,48 @@ public class SightingService {
         log.info("Sighting created with ID: {} for user: {}", saved.getId(), user.getEmail());
 
         return saved;
+    }
+
+    /**
+     * AiDetection 엔티티 저장 (모든 감지 결과 저장)
+     *
+     * @param media Media 엔티티
+     * @param detections Vision API 감지 결과
+     */
+    private void saveAiDetections(Media media, List<AnimalDetection> detections) {
+        if (detections == null || detections.isEmpty()) {
+            log.debug("No detections to save for Media ID: {}", media.getId());
+            return;
+        }
+
+        for (AnimalDetection detection : detections) {
+            AiDetection aiDetection = new AiDetection();
+            aiDetection.setMedia(media);
+            aiDetection.setLabel(detection.getLabel());
+            aiDetection.setScore(detection.getConfidence() != null
+                ? java.math.BigDecimal.valueOf(detection.getConfidence())
+                : null);
+
+            // extra_info에 scientificName, description 저장
+            java.util.Map<String, Object> extraInfo = new java.util.HashMap<>();
+            if (detection.getScientificName() != null) {
+                extraInfo.put("scientificName", detection.getScientificName());
+            }
+            if (detection.getDescription() != null) {
+                extraInfo.put("description", detection.getDescription());
+            }
+            aiDetection.setExtraInfo(extraInfo);
+
+            // Bounding box는 null로 설정 (향후 Object Detection 추가 시 사용)
+            aiDetection.setXMin(null);
+            aiDetection.setYMin(null);
+            aiDetection.setXMax(null);
+            aiDetection.setYMax(null);
+
+            aiDetectionRepository.save(aiDetection);
+        }
+
+        log.info("Saved {} AI detections for Media ID: {}", detections.size(), media.getId());
     }
 
     /**
