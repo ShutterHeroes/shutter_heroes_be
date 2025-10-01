@@ -76,6 +76,9 @@ public class SecurityConfiguration {
                     auth.requestMatchers(HttpMethod.DELETE, "/api/v1/medias/*").authenticated();
                     // 반경 조회는 공개(비로그인 허용) - 내부적으로 private은 본인만 포함
                     auth.requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/sightings/*/nearby").permitAll();
+                    // 좌표 기반 반경 조회도 공개(비로그인 허용) - 내부에서 private은 본인만 포함
+                    auth.requestMatchers(org.springframework.http.HttpMethod.GET, "/api/v1/sightings/nearby").permitAll();
+
                     // Swagger UI 경로 허용 (기본 생성 문서)
                     auth.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**", "/favicon.ico").permitAll();
 
