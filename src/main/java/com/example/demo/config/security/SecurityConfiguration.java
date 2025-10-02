@@ -76,6 +76,10 @@ public class SecurityConfiguration {
                     auth.requestMatchers(HttpMethod.DELETE, "/api/v1/medias/*").authenticated();
                     // Sighting 관련 API
                     auth.requestMatchers(HttpMethod.POST, "/api/v1/sightings").authenticated();
+                    auth.requestMatchers(HttpMethod.GET, "/api/v1/sightings").permitAll();  // 목록 조회 (비로그인 허용)
+                    auth.requestMatchers(HttpMethod.GET, "/api/v1/sightings/{sightingId}").permitAll();  // 상세 조회 (비로그인 허용)
+                    auth.requestMatchers(HttpMethod.PATCH, "/api/v1/sightings/{sightingId}").authenticated();  // 수정 (로그인 필요)
+                    auth.requestMatchers(HttpMethod.DELETE, "/api/v1/sightings/{sightingId}").authenticated();  // 삭제 (로그인 필요)
                     // 좌표 기반 반경 조회도 공개(비로그인 허용) - 내부에서 private은 본인만 포함
                     auth.requestMatchers(HttpMethod.GET, "/api/v1/sightings/nearby").permitAll();
                     // AI 관련 API

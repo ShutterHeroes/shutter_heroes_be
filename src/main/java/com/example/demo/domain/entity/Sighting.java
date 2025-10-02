@@ -5,6 +5,8 @@ import com.example.demo.domain.converter.VisibilityConverter;
 import com.example.demo.domain.enums.DetectedBy;
 import com.example.demo.domain.enums.Visibility;
 import com.example.demo.domain.web.dto.SightingUpdateRequest;
+import com.example.demo.exceptions.errorcode.SightingErrorCode;
+import com.example.demo.exceptions.exception.SightingException;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -137,7 +139,7 @@ public class Sighting {
         try {
             return Visibility.valueOf(visibility.toUpperCase());
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("Invalid visibility value: " + visibility + ". Must be PUBLIC or PRIVATE");
+            throw new SightingException(SightingErrorCode.INVALID_VISIBILITY);
         }
     }
 }
