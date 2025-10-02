@@ -2,6 +2,8 @@ package com.example.demo.domain.repository;
 
 import com.example.demo.domain.entity.Sighting;
 import com.example.demo.domain.repository.projection.SightingAroundRow;
+import com.example.demo.domain.repository.projection.SightingListRow;
+import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import org.springframework.data.jpa.repository.Query;
@@ -112,4 +114,84 @@ public interface SightingRepository extends JpaRepository<Sighting, UUID> {
                                               @Param("lat") double lat,
                                               @Param("viewerId") UUID viewerIdNullable,
                                               @Param("radiusMeters") double radiusMeters);
+
+    /**
+     * Sighting 전체 목록 조회 (페이징, 검색)
+     * - keyword: species.scientific_name 또는 species.common_name_ko로 ILIKE 검색
+     * - 비로그인: public만
+     * - 로그인: public + (본인 private)
+     * - sortBy와 sortOrder는 Service에서 Pageable로 전달
+     */
+    @Query(value = """
+        select
+            s.id                                        as id,
+            s.title                                     as title,
+            s.description                               as description,
+            s.occurred_at                               as occurredAt,
+            s.detected_by::text                         as detectedBy,
+            s.ai_confidence                             as aiConfidence,
+            s.visibility::text                          as visibility,
+            s.is_verified                               as isVerified,
+            s.created_at                                as createdAt,
+            s.updated_at                                as updatedAt,
+            u.display_name                              as displayName,
+            sp.common_name_ko                           as commonNameKo,
+            sp.common_name_en                           as commonNameEn,
+            sp.scientific_name                          as scientificName,
+            sp.status::text                             as status,
+            (m.extra_info->>'sanitizedUrl')             as sanitizedUrl,
+            public.ST_AsGeoJSON(s.geom)                 as geom
+        from app.sightings s
+        join app.users u on u.id = s.user_id
+        left join app.species sp on sp.id = s.species_id
+        left join app.media m on m.id = s.media_id
+        where
+            (
+                s.visibility = 'public'
+                or (:viewerId is not null and s.visibility = 'private' and s.user_id = :viewerId)
+            )
+            and (
+                :keyword is null
+                or sp.scientific_name ilike '%' || :keyword || '%'
+                or sp.common_name_ko ilike '%' || :keyword || '%'
+            )
+        order by
+            case when :sortBy = 'occurred_at' and :sortOrder = 'asc' then s.occurred_at end asc nulls last,
+            case when :sortBy = 'occurred_at' and :sortOrder = 'desc' then s.occurred_at end desc nulls last,
+            case when :sortBy = 'created_at' and :sortOrder = 'asc' then s.created_at end asc,
+            case when :sortBy = 'created_at' and :sortOrder = 'desc' then s.created_at end desc,
+            s.created_at desc
+        limit :limit offset :offset
+    """, nativeQuery = true)
+    List<SightingListRow> findAllWithSearch(
+        @Param("viewerId") UUID viewerIdNullable,
+        @Param("keyword") String keyword,
+        @Param("sortBy") String sortBy,
+        @Param("sortOrder") String sortOrder,
+        @Param("limit") int limit,
+        @Param("offset") int offset
+    );
+
+    /**
+     * Sighting 전체 개수 조회 (검색 조건 포함)
+     */
+    @Query(value = """
+        select count(*)
+        from app.sightings s
+        left join app.species sp on sp.id = s.species_id
+        where
+            (
+                s.visibility = 'public'
+                or (:viewerId is not null and s.visibility = 'private' and s.user_id = :viewerId)
+            )
+            and (
+                :keyword is null
+                or sp.scientific_name ilike '%' || :keyword || '%'
+                or sp.common_name_ko ilike '%' || :keyword || '%'
+            )
+    """, nativeQuery = true)
+    long countAllWithSearch(
+        @Param("viewerId") UUID viewerIdNullable,
+        @Param("keyword") String keyword
+    );
 }

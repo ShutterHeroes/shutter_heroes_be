@@ -12,15 +12,21 @@ import com.example.demo.domain.event.SpeciesProcessingEvent;
 import com.example.demo.domain.repository.AiDetectionRepository;
 import com.example.demo.domain.repository.MediaRepository;
 import com.example.demo.domain.repository.SightingRepository;
+import com.example.demo.domain.repository.projection.SightingListRow;
+import com.example.demo.domain.web.dto.SightingListItemDto;
+import com.example.demo.domain.web.dto.SightingListResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Sighting 생성 및 관리를 담당하는 서비스
@@ -309,6 +315,92 @@ public class SightingService {
             detection.getConfidence()
         );
         eventPublisher.publishEvent(event);
+    }
+
+    /**
+     * Sighting 전체 목록 조회 (페이징, 검색)
+     *
+     * @param viewerIdNullable 로그인 사용자 ID (비로그인 시 null)
+     * @param keyword 검색어 (학명 또는 한국어 이름, null이면 전체 조회)
+     * @param pageable 페이징 정보 (page, size, sort)
+     * @return 페이징 처리된 Sighting 목록
+     */
+    @Transactional(readOnly = true)
+    public SightingListResponse findAllSightings(
+        UUID viewerIdNullable,
+        String keyword,
+        Pageable pageable
+    ) {
+        // 검색어 정규화 (빈 문자열을 null로 변환)
+        String normalizedKeyword = (keyword == null || keyword.trim().isEmpty()) ? null : keyword.trim();
+
+        // Pageable에서 정렬 정보 추출
+        String sortBy = "created_at";  // 기본값
+        String sortOrder = "desc";     // 기본값
+
+        if (pageable.getSort().isSorted()) {
+            Sort.Order order = pageable.getSort().iterator().next();
+            sortBy = convertPropertyToColumn(order.getProperty());
+            sortOrder = order.isAscending() ? "asc" : "desc";
+        }
+
+        int page = pageable.getPageNumber();
+        int size = pageable.getPageSize();
+        int offset = page * size;
+
+        // 데이터 조회
+        List<SightingListRow> rows = sightingRepository.findAllWithSearch(
+            viewerIdNullable,
+            normalizedKeyword,
+            sortBy,
+            sortOrder,
+            size,
+            offset
+        );
+
+        // 전체 개수 조회
+        long totalElements = sightingRepository.countAllWithSearch(viewerIdNullable, normalizedKeyword);
+
+        // DTO 변환
+        List<SightingListItemDto> items = rows.stream()
+            .map(this::mapListRow)
+            .toList();
+
+        return SightingListResponse.of(items, totalElements, page, size);
+    }
+
+    /**
+     * Entity 속성명을 DB 컬럼명으로 변환
+     * (camelCase -> snake_case)
+     */
+    private String convertPropertyToColumn(String property) {
+        return switch (property) {
+            case "createdAt" -> "created_at";
+            case "occurredAt" -> "occurred_at";
+            default -> "created_at";
+        };
+    }
+
+    private SightingListItemDto mapListRow(SightingListRow r) {
+        return new SightingListItemDto(
+            r.getId(),
+            r.getTitle(),
+            r.getDescription(),
+            r.getOccurredAt(),
+            r.getDetectedBy(),
+            r.getAiConfidence(),
+            r.getVisibility(),
+            r.getIsVerified(),
+            r.getCreatedAt(),
+            r.getUpdatedAt(),
+            r.getDisplayName(),
+            r.getCommonNameKo(),
+            r.getCommonNameEn(),
+            r.getScientificName(),
+            r.getStatus(),
+            r.getSanitizedUrl(),
+            r.getGeom()
+        );
     }
 
     /**
