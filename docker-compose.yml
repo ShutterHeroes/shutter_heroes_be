@@ -1,0 +1,89 @@
+services:
+  db:
+    image: postgis/postgis:15-3.4
+    container_name: postgres_db
+    restart: always
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: mydatabase
+      TZ: "Asia/Seoul"
+    ports:
+      - "5433:5432"
+    volumes:
+      - ./postgres_data:/var/lib/postgresql/data
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB || exit 1"]
+      interval: 5s
+      timeout: 5s
+      retries: 12
+      start_period: 20s   # ← 초기 기동 유예
+
+  migrator:
+    image: postgis/postgis:15-3.4
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    environment:
+      PGPASSWORD: ${DB_PASSWORD}
+      PGHOST: "db"
+      PGPORT: "5432"
+      PGUSER: "postgres"
+      PGDATABASE: "mydatabase"
+      RUN_SEED: "true"
+    volumes:
+      - ./migrations:/migrations:ro
+      - ./scripts:/scripts:ro
+    networks:
+      - app-network
+    entrypoint: ["/scripts/migrate.sh"]
+
+  app:
+    image: ${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG:-latest}
+    container_name: shutter-heroes-api
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+    ports:
+      - "8080:8080"
+    environment:
+      # Spring Profile
+      - SPRING_PROFILES_ACTIVE=local
+
+      # Database Configuration
+      - SPRING_DATASOURCE_URL=jdbc:postgresql://db:5432/mydatabase
+      - SPRING_DATASOURCE_USERNAME=postgres
+      - SPRING_DATASOURCE_PASSWORD=${DB_PASSWORD}
+      - SPRING_DATASOURCE_DRIVER_CLASS_NAME=org.postgresql.Driver
+      - SPRING_JPA_PROPERTIES_HIBERNATE_DEFAULT_SCHEMA=app
+
+      # OAuth2 Kakao
+      - KAKAO_CLIENT_ID=${KAKAO_CLIENT_ID}
+      - KAKAO_CLIENT_SECRET=${KAKAO_CLIENT_SECRET}
+
+      # JWT
+      - JWT_SECRET_KEY=${JWT_SECRET_KEY}
+
+      # AWS S3
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+
+      # OpenAI
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+
+    restart: unless-stopped
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health-check"]
+      interval: 30s
+      timeout: 10s
+      retries: 10
+      start_period: 40s
+
+networks:
+  app-network:
+    driver: bridge
