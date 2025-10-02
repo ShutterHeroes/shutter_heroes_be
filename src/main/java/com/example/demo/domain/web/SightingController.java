@@ -7,11 +7,14 @@ import com.example.demo.domain.repository.UserRepository;
 import com.example.demo.domain.service.SightingService;
 import com.example.demo.domain.web.dto.SightingDetailResponse;
 import com.example.demo.domain.web.dto.SightingListResponse;
+import com.example.demo.domain.web.dto.SightingUpdateRequest;
+import com.example.demo.domain.web.dto.SightingUpdateResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Pageable;
@@ -169,5 +172,41 @@ public class SightingController {
             response.getSightingId(), response.getSpeciesProcessingStatus());
 
         return ResponseEntity.status(HttpStatus.CREATED).body(response);
+    }
+
+    /**
+     * Sighting 수정
+     */
+    @Operation(
+        summary = "Sighting 수정",
+        description = "Sighting 정보를 수정합니다. " +
+                      "수정 가능한 필드: title, description, visibility, occurredAt, addressText. " +
+                      "소유자 또는 ADMIN만 수정 가능합니다. " +
+                      "GPS(geom)와 AI 감지 결과(species_id)는 수정할 수 없습니다."
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "수정 성공"),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청 (유효하지 않은 파라미터)"),
+        @ApiResponse(responseCode = "401", description = "인증 실패"),
+        @ApiResponse(responseCode = "403", description = "권한 없음 (소유자 또는 ADMIN만 수정 가능)"),
+        @ApiResponse(responseCode = "404", description = "Sighting을 찾을 수 없음"),
+        @ApiResponse(responseCode = "500", description = "서버 오류")
+    })
+    @PatchMapping("/{sightingId}")
+    public SightingUpdateResponse updateSighting(
+        @PathVariable UUID sightingId,
+        @Valid @RequestBody SightingUpdateRequest request,
+        @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        boolean isAdmin = isAdmin(principal);
+        return sightingService.updateSighting(sightingId, principal.getId(), isAdmin, request);
+    }
+
+    /**
+     * 현재 사용자가 ADMIN 권한을 가지고 있는지 확인합니다.
+     */
+    private boolean isAdmin(UserPrincipal principal) {
+        return principal.getAuthorities().stream()
+            .anyMatch(auth -> auth.getAuthority().equals("ROLE_ADMIN"));
     }
 }

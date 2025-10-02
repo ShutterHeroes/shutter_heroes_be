@@ -17,6 +17,8 @@ import com.example.demo.domain.repository.projection.SightingListRow;
 import com.example.demo.domain.web.dto.SightingDetailResponse;
 import com.example.demo.domain.web.dto.SightingListItemDto;
 import com.example.demo.domain.web.dto.SightingListResponse;
+import com.example.demo.domain.web.dto.SightingUpdateRequest;
+import com.example.demo.domain.web.dto.SightingUpdateResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
@@ -492,6 +494,60 @@ public class SightingService {
             r.getGeom()
         );
     }
+
+    /**
+     * Sighting 수정
+     *
+     * @param sightingId Sighting ID
+     * @param actorId 요청한 사용자 ID
+     * @param isAdmin 관리자 여부
+     * @param request 수정 요청 데이터
+     * @return 수정된 Sighting 정보
+     * @throws ResponseStatusException NOT_FOUND (404) - Sighting이 존재하지 않음
+     * @throws ResponseStatusException FORBIDDEN (403) - 수정 권한 없음
+     * @throws ResponseStatusException BAD_REQUEST (400) - 잘못된 visibility 값
+     */
+    @Transactional
+    public SightingUpdateResponse updateSighting(
+        UUID sightingId,
+        UUID actorId,
+        boolean isAdmin,
+        SightingUpdateRequest request
+    ) {
+        // Sighting 조회
+        Sighting sighting = sightingRepository.findById(sightingId)
+            .orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "Sighting not found"
+            ));
+
+        // 권한 검증 (소유자 또는 ADMIN)
+        if (!isAdmin && !sighting.getUser().getId().equals(actorId)) {
+            throw new ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "You don't have permission to update this sighting"
+            );
+        }
+
+        // 엔티티 업데이트
+        sighting.update(request);
+
+        // 저장 (updated_at은 @PreUpdate로 자동 설정됨)
+        Sighting updated = sightingRepository.save(sighting);
+
+        log.info("Sighting updated: {} by user: {}", sightingId, actorId);
+
+        return SightingUpdateResponse.of(
+            updated.getId(),
+            updated.getTitle(),
+            updated.getDescription(),
+            updated.getVisibility().name(),
+            updated.getOccurredAt(),
+            updated.getAddressText(),
+            updated.getUpdatedAt()
+        );
+    }
+
 
     /**
      * Sighting 생성 결과를 담는 내부 클래스
