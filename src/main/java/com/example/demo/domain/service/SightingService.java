@@ -12,7 +12,9 @@ import com.example.demo.domain.event.SpeciesProcessingEvent;
 import com.example.demo.domain.repository.AiDetectionRepository;
 import com.example.demo.domain.repository.MediaRepository;
 import com.example.demo.domain.repository.SightingRepository;
+import com.example.demo.domain.repository.projection.SightingDetailRow;
 import com.example.demo.domain.repository.projection.SightingListRow;
+import com.example.demo.domain.web.dto.SightingDetailResponse;
 import com.example.demo.domain.web.dto.SightingListItemDto;
 import com.example.demo.domain.web.dto.SightingListResponse;
 import lombok.RequiredArgsConstructor;
@@ -20,9 +22,11 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.server.ResponseStatusException;
 
 import java.math.BigDecimal;
 import java.util.List;
@@ -399,6 +403,92 @@ public class SightingService {
             r.getScientificName(),
             r.getStatus(),
             r.getSanitizedUrl(),
+            r.getGeom()
+        );
+    }
+
+    /**
+     * Sighting 상세 조회
+     *
+     * @param sightingId Sighting ID
+     * @param viewerIdNullable 로그인 사용자 ID (비로그인 시 null)
+     * @return Sighting 상세 정보
+     * @throws ResponseStatusException NOT_FOUND (404) - Sighting이 존재하지 않거나 권한 없음
+     */
+    @Transactional(readOnly = true)
+    public SightingDetailResponse findSightingDetail(UUID sightingId, UUID viewerIdNullable) {
+        SightingDetailRow row = sightingRepository.findDetailById(sightingId, viewerIdNullable)
+            .orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "Sighting not found or you don't have permission to access it"
+            ));
+
+        return mapDetailRow(row, viewerIdNullable);
+    }
+
+    private SightingDetailResponse mapDetailRow(SightingDetailRow r, UUID viewerId) {
+        // User 정보
+        SightingDetailResponse.UserInfo userInfo = new SightingDetailResponse.UserInfo(
+            r.getUserId(),
+            r.getDisplayName(),
+            r.getUserEmail()
+        );
+
+        // Species 정보 (없을 수 있음)
+        SightingDetailResponse.SpeciesInfo speciesInfo = null;
+        if (r.getSpeciesId() != null) {
+            speciesInfo = new SightingDetailResponse.SpeciesInfo(
+                r.getSpeciesId(),
+                r.getCommonNameKo(),
+                r.getCommonNameEn(),
+                r.getScientificName(),
+                r.getStatus()
+            );
+        }
+
+        // EXIF 정보
+        SightingDetailResponse.ExifInfo exifInfo = new SightingDetailResponse.ExifInfo(
+            r.getCameraMake(),
+            r.getCameraModel(),
+            r.getCapturedAt(),
+            r.getGpsLatitude(),
+            r.getGpsLongitude()
+        );
+
+        // Media 정보 (없을 수 있음)
+        SightingDetailResponse.MediaInfo mediaInfo = null;
+        if (r.getMediaId() != null) {
+            // 소유자인 경우에만 storagePath(원본) 제공
+            boolean isOwner = viewerId != null && viewerId.equals(r.getUserId());
+            String storagePath = isOwner ? r.getStoragePath() : null;
+
+            mediaInfo = new SightingDetailResponse.MediaInfo(
+                r.getMediaId(),
+                r.getSanitizedUrl(),
+                storagePath,
+                r.getMimeType(),
+                r.getBytes(),
+                r.getWidth(),
+                r.getHeight(),
+                exifInfo
+            );
+        }
+
+        return new SightingDetailResponse(
+            r.getId(),
+            r.getTitle(),
+            r.getDescription(),
+            r.getOccurredAt(),
+            r.getDetectedBy(),
+            r.getAiConfidence(),
+            r.getVisibility(),
+            r.getIsVerified(),
+            r.getAddressText(),
+            r.getCreatedAt(),
+            r.getUpdatedAt(),
+            userInfo,
+            speciesInfo,
+            mediaInfo,
             r.getGeom()
         );
     }

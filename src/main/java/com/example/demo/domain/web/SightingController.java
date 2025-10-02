@@ -5,6 +5,7 @@ import com.example.demo.domain.dto.response.SightingCreateResponse;
 import com.example.demo.domain.entity.User;
 import com.example.demo.domain.repository.UserRepository;
 import com.example.demo.domain.service.SightingService;
+import com.example.demo.domain.web.dto.SightingDetailResponse;
 import com.example.demo.domain.web.dto.SightingListResponse;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -68,6 +69,29 @@ public class SightingController {
     ) {
         UUID viewer = (principal != null) ? principal.getId() : null;
         return sightingService.findAllSightings(viewer, keyword, pageable);
+    }
+
+    /**
+     * Sighting 상세 조회
+     */
+    @Operation(
+        summary = "Sighting 상세 조회",
+        description = "Sighting ID로 상세 정보를 조회합니다. " +
+                      "Public: 모든 사용자 조회 가능, Private: 소유자 또는 ADMIN만 조회 가능. " +
+                      "소유자인 경우 원본 이미지 URL(EXIF 포함)도 함께 반환됩니다."
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "상세 조회 성공"),
+        @ApiResponse(responseCode = "404", description = "Sighting을 찾을 수 없거나 권한이 없음"),
+        @ApiResponse(responseCode = "500", description = "서버 오류")
+    })
+    @GetMapping("/{sightingId}")
+    public SightingDetailResponse getSightingDetail(
+        @PathVariable UUID sightingId,
+        @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        UUID viewer = (principal != null) ? principal.getId() : null;
+        return sightingService.findSightingDetail(sightingId, viewer);
     }
 
     /**

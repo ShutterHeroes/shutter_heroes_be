@@ -2,14 +2,15 @@ package com.example.demo.domain.repository;
 
 import com.example.demo.domain.entity.Sighting;
 import com.example.demo.domain.repository.projection.SightingAroundRow;
+import com.example.demo.domain.repository.projection.SightingDetailRow;
 import com.example.demo.domain.repository.projection.SightingListRow;
-import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.stereotype.Repository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 /**
@@ -193,5 +194,60 @@ public interface SightingRepository extends JpaRepository<Sighting, UUID> {
     long countAllWithSearch(
         @Param("viewerId") UUID viewerIdNullable,
         @Param("keyword") String keyword
+    );
+
+    /**
+     * Sighting 상세 조회 (ID 기준)
+     * - 비로그인: public만
+     * - 로그인: public + (본인 private)
+     * - EXIF 정보, AI Detection 정보 포함
+     */
+    @Query(value = """
+        select
+            s.id                                        as id,
+            s.title                                     as title,
+            s.description                               as description,
+            s.occurred_at                               as occurredAt,
+            s.detected_by::text                         as detectedBy,
+            s.ai_confidence                             as aiConfidence,
+            s.visibility::text                          as visibility,
+            s.is_verified                               as isVerified,
+            s.address_text                              as addressText,
+            s.created_at                                as createdAt,
+            s.updated_at                                as updatedAt,
+            u.id                                        as userId,
+            u.display_name                              as displayName,
+            u.email                                     as userEmail,
+            sp.id                                       as speciesId,
+            sp.common_name_ko                           as commonNameKo,
+            sp.common_name_en                           as commonNameEn,
+            sp.scientific_name                          as scientificName,
+            sp.status::text                             as status,
+            m.id                                        as mediaId,
+            (m.extra_info->>'sanitizedUrl')             as sanitizedUrl,
+            m.storage_path                              as storagePath,
+            m.mime_type                                 as mimeType,
+            m.bytes                                     as bytes,
+            m.width                                     as width,
+            m.height                                    as height,
+            (m.extra_info->>'cameraMake')               as cameraMake,
+            (m.extra_info->>'cameraModel')              as cameraModel,
+            (m.extra_info->>'capturedAt')               as capturedAt,
+            (m.extra_info->>'gpsLatitude')::float       as gpsLatitude,
+            (m.extra_info->>'gpsLongitude')::float      as gpsLongitude,
+            public.ST_AsGeoJSON(s.geom)                 as geom
+        from app.sightings s
+        join app.users u on u.id = s.user_id
+        left join app.species sp on sp.id = s.species_id
+        left join app.media m on m.id = s.media_id
+        where s.id = :sightingId
+            and (
+                s.visibility = 'public'
+                or (:viewerId is not null and s.visibility = 'private' and s.user_id = :viewerId)
+            )
+    """, nativeQuery = true)
+    Optional<SightingDetailRow> findDetailById(
+        @Param("sightingId") UUID sightingId,
+        @Param("viewerId") UUID viewerIdNullable
     );
 }
