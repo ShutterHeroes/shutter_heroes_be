@@ -50,7 +50,16 @@ public class ChatCompletionResponse {
 
     public String getContent() {
         if (choices != null && !choices.isEmpty()) {
-            return choices.get(0).getMessage().getContent();
+            ChatMessage message = choices.get(0).getMessage();
+            Object content = message.getContent();
+
+            // String인 경우 그대로 반환
+            if (content instanceof String) {
+                return (String) content;
+            }
+
+            // getContentAsString() 메서드 사용
+            return message.getContentAsString();
         }
         return null;
     }
