@@ -30,7 +30,7 @@ import org.springframework.web.multipart.MultipartFile;
  */
 @Slf4j
 @RestController
-@RequestMapping("/api/sightings")
+@RequestMapping("/api/v1/sightings")
 @RequiredArgsConstructor
 @Tag(name = "Sighting", description = "동물 목격 정보 API")
 public class SightingController {
