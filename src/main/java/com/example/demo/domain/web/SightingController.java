@@ -5,6 +5,7 @@ import com.example.demo.domain.dto.response.SightingCreateResponse;
 import com.example.demo.domain.entity.User;
 import com.example.demo.domain.repository.UserRepository;
 import com.example.demo.domain.service.SightingService;
+import com.example.demo.domain.web.dto.SightingDeleteResponse;
 import com.example.demo.domain.web.dto.SightingDetailResponse;
 import com.example.demo.domain.web.dto.SightingListResponse;
 import com.example.demo.domain.web.dto.SightingUpdateRequest;
@@ -200,6 +201,31 @@ public class SightingController {
     ) {
         boolean isAdmin = isAdmin(principal);
         return sightingService.updateSighting(sightingId, principal.getId(), isAdmin, request);
+    }
+
+    /**
+     * Sighting 삭제
+     */
+    @Operation(
+        summary = "Sighting 삭제",
+        description = "Sighting을 삭제합니다. " +
+            "소유자 또는 ADMIN만 삭제 가능합니다. " +
+            "Hard Delete 방식으로 데이터베이스에서 완전히 삭제됩니다."
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "삭제 성공"),
+        @ApiResponse(responseCode = "401", description = "인증 실패"),
+        @ApiResponse(responseCode = "403", description = "권한 없음 (소유자 또는 ADMIN만 삭제 가능)"),
+        @ApiResponse(responseCode = "404", description = "Sighting을 찾을 수 없음"),
+        @ApiResponse(responseCode = "500", description = "서버 오류")
+    })
+    @DeleteMapping("/{sightingId}")
+    public SightingDeleteResponse deleteSighting(
+        @PathVariable UUID sightingId,
+        @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        boolean isAdmin = isAdmin(principal);
+        return sightingService.deleteSighting(sightingId, principal.getId(), isAdmin);
     }
 
     /**

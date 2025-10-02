@@ -14,6 +14,7 @@ import com.example.demo.domain.repository.MediaRepository;
 import com.example.demo.domain.repository.SightingRepository;
 import com.example.demo.domain.repository.projection.SightingDetailRow;
 import com.example.demo.domain.repository.projection.SightingListRow;
+import com.example.demo.domain.web.dto.SightingDeleteResponse;
 import com.example.demo.domain.web.dto.SightingDetailResponse;
 import com.example.demo.domain.web.dto.SightingListItemDto;
 import com.example.demo.domain.web.dto.SightingListResponse;
@@ -546,6 +547,45 @@ public class SightingService {
             updated.getAddressText(),
             updated.getUpdatedAt()
         );
+    }
+
+    /**
+     * Sighting 삭제
+     *
+     * @param sightingId 삭제할 Sighting ID
+     * @param actorId 요청자 ID
+     * @param isAdmin ADMIN 권한 여부
+     * @return SightingDeleteResponse
+     * @throws ResponseStatusException NOT_FOUND (404) - Sighting이 존재하지 않음
+     * @throws ResponseStatusException FORBIDDEN (403) - 삭제 권한 없음
+     */
+    @Transactional
+    public SightingDeleteResponse deleteSighting(
+        UUID sightingId,
+        UUID actorId,
+        boolean isAdmin
+    ) {
+        // Sighting 조회
+        Sighting sighting = sightingRepository.findById(sightingId)
+            .orElseThrow(() -> new ResponseStatusException(
+                HttpStatus.NOT_FOUND,
+                "Sighting not found"
+            ));
+
+        // 권한 검증 (소유자 또는 ADMIN)
+        if (!isAdmin && !sighting.getUser().getId().equals(actorId)) {
+            throw new ResponseStatusException(
+                HttpStatus.FORBIDDEN,
+                "You don't have permission to delete this sighting"
+            );
+        }
+
+        // Sighting 삭제
+        sightingRepository.delete(sighting);
+
+        log.info("Sighting deleted: {} by user: {}", sightingId, actorId);
+
+        return SightingDeleteResponse.of(sightingId);
     }
 
 
