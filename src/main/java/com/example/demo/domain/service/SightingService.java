@@ -78,7 +78,7 @@ public class SightingService {
      * Sighting 전체 목록 조회 (페이징, 검색)
      *
      * @param viewerIdNullable 로그인 사용자 ID (비로그인 시 null)
-     * @param keyword 검색어 (학명 또는 한국어 이름, null이면 전체 조회)
+     * @param keyword 검색어 (학명 또는 한국어 이름, 영어 이름. null이면 전체 조회)
      * @param pageable 페이징 정보 (page, size, sort)
      * @return 페이징 처리된 Sighting 목록
      */

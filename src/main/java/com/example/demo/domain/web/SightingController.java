@@ -56,7 +56,7 @@ public class SightingController {
     @Operation(
         summary = "Sighting 전체 목록 조회 (페이징, 검색)",
         description = "페이징 처리된 Sighting 목록을 조회합니다. " +
-                      "keyword로 학명(scientific_name) 또는 한국어 이름(common_name_ko)을 검색할 수 있습니다. " +
+                      "keyword로 학명(scientific_name) 또는 한국어 이름(common_name_ko), 또는 영어 이름(common_name_en)을 검색할 수 있습니다. " +
                       "비로그인: public만 조회, 로그인: public + 본인 private 조회 가능. " +
                       "기본 정렬: createdAt DESC, 기본 페이지 크기: 20"
     )

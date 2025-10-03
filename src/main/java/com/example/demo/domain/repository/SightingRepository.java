@@ -155,6 +155,7 @@ public interface SightingRepository extends JpaRepository<Sighting, UUID> {
                 :keyword is null
                 or sp.scientific_name ilike '%' || :keyword || '%'
                 or sp.common_name_ko ilike '%' || :keyword || '%'
+                or sp.common_name_en ilike '%' || :keyword || '%'
             )
         order by
             case when :sortBy = 'occurred_at' and :sortOrder = 'asc' then s.occurred_at end asc nulls last,
@@ -189,6 +190,7 @@ public interface SightingRepository extends JpaRepository<Sighting, UUID> {
                 :keyword is null
                 or sp.scientific_name ilike '%' || :keyword || '%'
                 or sp.common_name_ko ilike '%' || :keyword || '%'
+                or sp.common_name_en ilike '%' || :keyword || '%'
             )
     """, nativeQuery = true)
     long countAllWithSearch(
