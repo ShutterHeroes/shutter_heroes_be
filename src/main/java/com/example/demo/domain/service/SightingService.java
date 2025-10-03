@@ -142,6 +142,58 @@ public class SightingService {
     }
 
     /**
+     * 내가 제보한 Sighting 목록 조회 (페이징, 검색)
+     *
+     * @param userId 조회할 사용자 ID
+     * @param keyword 검색어 (학명 또는 한국어 이름, 영어 이름. null이면 전체 조회)
+     * @param pageable 페이징 정보 (page, size, sort)
+     * @return 페이징 처리된 Sighting 목록
+     */
+    @Transactional(readOnly = true)
+    public SightingListResponse findMyReports(
+        UUID userId,
+        String keyword,
+        Pageable pageable
+    ) {
+        // 검색어 정규화 (빈 문자열을 null로 변환)
+        String normalizedKeyword = (keyword == null || keyword.trim().isEmpty()) ? null : keyword.trim();
+
+        // Pageable에서 정렬 정보 추출
+        String sortBy = "created_at";  // 기본값
+        String sortOrder = "desc";     // 기본값
+
+        if (pageable.getSort().isSorted()) {
+            Sort.Order order = pageable.getSort().iterator().next();
+            sortBy = convertPropertyToColumn(order.getProperty());
+            sortOrder = order.isAscending() ? "asc" : "desc";
+        }
+
+        int page = pageable.getPageNumber();
+        int size = pageable.getPageSize();
+        int offset = page * size;
+
+        // 데이터 조회
+        List<SightingListRow> rows = sightingRepository.findMyReports(
+            userId,
+            normalizedKeyword,
+            sortBy,
+            sortOrder,
+            size,
+            offset
+        );
+
+        // 전체 개수 조회
+        long totalElements = sightingRepository.countMyReports(userId, normalizedKeyword);
+
+        // DTO 변환
+        List<SightingListItemDto> items = rows.stream()
+            .map(this::mapListRow)
+            .toList();
+
+        return SightingListResponse.of(items, totalElements, page, size);
+    }
+
+    /**
      * 이미지를 업로드하고 Sighting을 생성합니다.
      *
      * <p><b>동작 방식:</b></p>

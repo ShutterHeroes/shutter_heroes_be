@@ -79,6 +79,7 @@ public class SecurityConfiguration {
                     // Sighting 관련 API
                     auth.requestMatchers(HttpMethod.POST, "/api/v1/sightings").authenticated();
                     auth.requestMatchers(HttpMethod.GET, "/api/v1/sightings").permitAll();  // 목록 조회 (비로그인 허용)
+                    auth.requestMatchers(HttpMethod.GET, "/api/v1/sightings/my").authenticated();  // 내 목록 조회 (로그인 필요)
                     auth.requestMatchers(HttpMethod.GET, "/api/v1/sightings/{sightingId}").permitAll();  // 상세 조회 (비로그인 허용)
                     auth.requestMatchers(HttpMethod.PATCH, "/api/v1/sightings/{sightingId}").authenticated();  // 수정 (로그인 필요)
                     auth.requestMatchers(HttpMethod.DELETE, "/api/v1/sightings/{sightingId}").authenticated();  // 삭제 (로그인 필요)

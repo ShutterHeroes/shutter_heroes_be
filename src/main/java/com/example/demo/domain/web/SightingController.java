@@ -76,6 +76,31 @@ public class SightingController {
     }
 
     /**
+     * 내가 제보한 Sighting 목록 조회 (페이징, 검색)
+     */
+    @Operation(
+        summary = "내가 제보한 Sighting 목록 조회 (페이징, 검색)",
+        description = "로그인한 사용자가 제보한 Sighting 목록을 조회합니다. " +
+                      "keyword로 학명(scientific_name) 또는 한국어 이름(common_name_ko), 또는 영어 이름(common_name_en)을 검색할 수 있습니다. " +
+                      "본인이 작성한 모든 Sighting 조회 (public/private 모두 포함). " +
+                      "기본 정렬: createdAt DESC, 기본 페이지 크기: 20"
+    )
+    @ApiResponses({
+        @ApiResponse(responseCode = "200", description = "목록 조회 성공"),
+        @ApiResponse(responseCode = "400", description = "잘못된 요청 (유효하지 않은 파라미터)"),
+        @ApiResponse(responseCode = "401", description = "인증 실패 (로그인 필요)"),
+        @ApiResponse(responseCode = "500", description = "서버 오류")
+    })
+    @GetMapping("/my")
+    public SightingListResponse getMySightings(
+        @PageableDefault(size = 20, sort = "createdAt", direction = Sort.Direction.DESC) Pageable pageable,
+        @RequestParam(name = "keyword", required = false) String keyword,
+        @AuthenticationPrincipal UserPrincipal principal
+    ) {
+        return sightingService.findMyReports(principal.getId(), keyword, pageable);
+    }
+
+    /**
      * Sighting 상세 조회
      */
     @Operation(
