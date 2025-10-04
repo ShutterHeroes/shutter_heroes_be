@@ -201,7 +201,7 @@ public class SightingService {
      *   <li>EXIF 메타데이터 추출 (GPS, 촬영시간, 카메라정보)</li>
      *   <li>EXIF 제거 이미지 생성</li>
      *   <li>S3에 두 버전 업로드 (원본 + EXIF 제거)</li>
-     *   <li>Vision API로 동물 인식 (가장 신뢰도 높은 동물 선택)</li>
+     *   <li>Vision API로 동물 인식 (동물 없으면 예외 발생)</li>
      *   <li>Media 엔티티 생성 및 저장 (extra_info JSONB에 EXIF 저장)</li>
      *   <li>Sighting 엔티티 생성 및 저장 (EXIF 데이터 반영)</li>
      *   <li>사용자에게 즉시 응답 (speciesProcessingStatus: PENDING)</li>
@@ -243,25 +243,24 @@ public class SightingService {
         // 4. Vision API로 동물 인식 (신뢰도 0.5 이상, 최대 5개)
         List<AnimalDetection> detections = animalVisionService.detectAnimals(imageFile, 0.5f, 5);
 
-        // 5. Media 엔티티 생성 및 저장
-        Media media = createMediaEntity(user, imageFile, uploadResult, exifMetadata);
-
-        // 6. AiDetection 엔티티 저장 (모든 감지 결과 저장)
-        saveAiDetections(media, detections);
-
+        // 5. 동물이 감지되지 않은 경우 예외 발생
         if (detections.isEmpty()) {
             log.warn("No animals detected in image: {}", imageFile.getOriginalFilename());
-            // 동물이 인식되지 않은 경우에도 Sighting 생성 (Species 없음)
-            Sighting sighting = createSightingEntity(user, media, exifMetadata, title, description, null, null);
-            return SightingCreateResult.of(sighting, media, detections, false);
+            throw new SightingException(SightingErrorCode.NO_ANIMAL_DETECTED);
         }
 
-        // 7. 가장 신뢰도 높은 동물 선택 (이미 신뢰도 순으로 정렬됨)
+        // 6. Media 엔티티 생성 및 저장
+        Media media = createMediaEntity(user, imageFile, uploadResult, exifMetadata);
+
+        // 7. AiDetection 엔티티 저장 (모든 감지 결과 저장)
+        saveAiDetections(media, detections);
+
+        // 8. 가장 신뢰도 높은 동물 선택 (이미 신뢰도 순으로 정렬됨)
         AnimalDetection topDetection = detections.get(0);
         log.info("Top detection: {} (confidence: {}, scientificName: {})",
             topDetection.getLabel(), topDetection.getConfidence(), topDetection.getScientificName());
 
-        // 8. Sighting 엔티티 생성 및 저장
+        // 9. Sighting 엔티티 생성 및 저장
         Sighting sighting = createSightingEntity(
             user,
             media,
@@ -272,7 +271,7 @@ public class SightingService {
             topDetection.getConfidence()
         );
 
-        // 9. Species 처리 이벤트 발행 (비동기 처리)
+        // 10. Species 처리 이벤트 발행 (비동기 처리)
         if (topDetection.getScientificName() != null && !topDetection.getScientificName().isEmpty()) {
             publishSpeciesProcessingEvent(sighting, topDetection);
             log.info("Species processing event published for Sighting ID: {}", sighting.getId());
@@ -280,7 +279,7 @@ public class SightingService {
             log.warn("No scientific name found for detection: {}. Skipping Species processing.", topDetection.getLabel());
         }
 
-        // 10. 사용자에게 즉시 응답 반환 (Species 처리는 백그라운드)
+        // 11. 사용자에게 즉시 응답 반환 (Species 처리는 백그라운드)
         return SightingCreateResult.of(sighting, media, detections, true);
     }
 
