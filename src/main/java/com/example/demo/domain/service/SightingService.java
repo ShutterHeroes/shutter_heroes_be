@@ -67,6 +67,8 @@ public class SightingService {
     private final MediaRepository mediaRepository;
     private final AiDetectionRepository aiDetectionRepository;
     private final AnimalVisionService animalVisionService;
+    private final YoloInferenceService yoloInferenceService;
+    private final YoloCallbackService yoloCallbackService;
     private final S3Service s3Service;
     private final ExifService exifService;
     private final ExifRemovalService exifRemovalService;
@@ -202,7 +204,9 @@ public class SightingService {
      *   <li>EXIF 제거 이미지 생성</li>
      *   <li>S3에 두 버전 업로드 (원본 + EXIF 제거)</li>
      *   <li>Vision API로 동물 인식 (동물 없으면 예외 발생)</li>
+     *   <li>FastAPI YOLO 추론 요청 (비동기)</li>
      *   <li>Media 엔티티 생성 및 저장 (extra_info JSONB에 EXIF 저장)</li>
+     *   <li>YOLO 결과 대기 (최대 5초) 및 최적 탐지 결과 선택 (YOLO >= 90% ? YOLO : Vision API)</li>
      *   <li>Sighting 엔티티 생성 및 저장 (EXIF 데이터 반영)</li>
      *   <li>사용자에게 즉시 응답 (speciesProcessingStatus: PENDING)</li>
      *   <li>SpeciesProcessingEvent 발행 → 백그라운드에서 Species 생성</li>
@@ -249,18 +253,21 @@ public class SightingService {
             throw new SightingException(SightingErrorCode.NO_ANIMAL_DETECTED);
         }
 
-        // 6. Media 엔티티 생성 및 저장
+        // 6. FastAPI YOLO 추론 요청 (비동기)
+        String yoloRequestId = requestYoloInference(uploadResult.getSanitizedUrl());
+
+        // 7. Media 엔티티 생성 및 저장
         Media media = createMediaEntity(user, imageFile, uploadResult, exifMetadata);
 
-        // 7. AiDetection 엔티티 저장 (모든 감지 결과 저장)
-        saveAiDetections(media, detections);
+        // 8. AiDetection 엔티티 저장 - Vision API 결과 (모든 감지 결과 저장)
+        saveAiDetections(media, detections, "VISION");
 
-        // 8. 가장 신뢰도 높은 동물 선택 (이미 신뢰도 순으로 정렬됨)
-        AnimalDetection topDetection = detections.get(0);
-        log.info("Top detection: {} (confidence: {}, scientificName: {})",
+        // 9. YOLO 결과 대기 및 처리 (최대 5초)
+        AnimalDetection topDetection = selectBestDetection(detections, yoloRequestId, media);
+        log.info("Final top detection: {} (confidence: {}, scientificName: {})",
             topDetection.getLabel(), topDetection.getConfidence(), topDetection.getScientificName());
 
-        // 9. Sighting 엔티티 생성 및 저장
+        // 10. Sighting 엔티티 생성 및 저장
         Sighting sighting = createSightingEntity(
             user,
             media,
@@ -271,7 +278,7 @@ public class SightingService {
             topDetection.getConfidence()
         );
 
-        // 10. Species 처리 이벤트 발행 (비동기 처리)
+        // 11. Species 처리 이벤트 발행 (비동기 처리)
         if (topDetection.getScientificName() != null && !topDetection.getScientificName().isEmpty()) {
             publishSpeciesProcessingEvent(sighting, topDetection);
             log.info("Species processing event published for Sighting ID: {}", sighting.getId());
@@ -279,7 +286,7 @@ public class SightingService {
             log.warn("No scientific name found for detection: {}. Skipping Species processing.", topDetection.getLabel());
         }
 
-        // 11. 사용자에게 즉시 응답 반환 (Species 처리는 백그라운드)
+        // 12. 사용자에게 즉시 응답 반환 (Species 처리는 백그라운드)
         return SightingCreateResult.of(sighting, media, detections, true);
     }
 
@@ -567,9 +574,10 @@ public class SightingService {
      * AiDetection 엔티티 저장 (모든 감지 결과 저장)
      *
      * @param media Media 엔티티
-     * @param detections Vision API 감지 결과
+     * @param detections AI 감지 결과
+     * @param source 감지 소스 ("VISION" 또는 "YOLO")
      */
-    private void saveAiDetections(Media media, List<AnimalDetection> detections) {
+    private void saveAiDetections(Media media, List<AnimalDetection> detections, String source) {
         if (detections == null || detections.isEmpty()) {
             log.debug("No detections to save for Media ID: {}", media.getId());
             return;
@@ -583,8 +591,9 @@ public class SightingService {
                 ? java.math.BigDecimal.valueOf(detection.getConfidence())
                 : null);
 
-            // extra_info에 scientificName, description 저장
+            // extra_info에 scientificName, description, source 저장
             java.util.Map<String, Object> extraInfo = new java.util.HashMap<>();
+            extraInfo.put("source", source);
             if (detection.getScientificName() != null) {
                 extraInfo.put("scientificName", detection.getScientificName());
             }
@@ -593,16 +602,182 @@ public class SightingService {
             }
             aiDetection.setExtraInfo(extraInfo);
 
-            // Bounding box는 null로 설정 (향후 Object Detection 추가 시 사용)
-            aiDetection.setXMin(null);
-            aiDetection.setYMin(null);
-            aiDetection.setXMax(null);
-            aiDetection.setYMax(null);
+            // Bounding box 설정 (YOLO의 경우 있을 수 있음)
+            if (detection.getBoundingBox() != null) {
+                aiDetection.setXMin(detection.getBoundingBox().getX1() != null
+                    ? BigDecimal.valueOf(detection.getBoundingBox().getX1()) : null);
+                aiDetection.setYMin(detection.getBoundingBox().getY1() != null
+                    ? BigDecimal.valueOf(detection.getBoundingBox().getY1()) : null);
+                aiDetection.setXMax(detection.getBoundingBox().getX2() != null
+                    ? BigDecimal.valueOf(detection.getBoundingBox().getX2()) : null);
+                aiDetection.setYMax(detection.getBoundingBox().getY2() != null
+                    ? BigDecimal.valueOf(detection.getBoundingBox().getY2()) : null);
+            } else {
+                aiDetection.setXMin(null);
+                aiDetection.setYMin(null);
+                aiDetection.setXMax(null);
+                aiDetection.setYMax(null);
+            }
 
             aiDetectionRepository.save(aiDetection);
         }
 
-        log.info("Saved {} AI detections for Media ID: {}", detections.size(), media.getId());
+        log.info("Saved {} {} AI detections for Media ID: {}", detections.size(), source, media.getId());
+    }
+
+    /**
+     * FastAPI YOLO 추론 요청
+     *
+     * @param sanitizedImageUrl EXIF가 제거된 이미지 URL
+     * @return YOLO 요청 ID (실패 시 null)
+     */
+    private String requestYoloInference(String sanitizedImageUrl) {
+        try {
+            com.example.demo.domain.dto.yolo.YoloInferResponse response =
+                yoloInferenceService.requestInference(java.util.List.of(sanitizedImageUrl));
+            log.info("YOLO inference requested: requestId={}", response.getRequestId());
+            return response.getRequestId();
+        } catch (Exception e) {
+            log.warn("Failed to request YOLO inference: {}. Continuing with Vision API result only.", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Vision API와 YOLO 결과를 비교하여 최적의 탐지 결과 선택
+     *
+     * @param visionDetections Vision API 탐지 결과 (신뢰도 순 정렬됨)
+     * @param yoloRequestId YOLO 요청 ID
+     * @param media Media 엔티티 (YOLO 결과 저장용)
+     * @return 최종 선택된 탐지 결과
+     */
+    private AnimalDetection selectBestDetection(
+        List<AnimalDetection> visionDetections,
+        String yoloRequestId,
+        Media media
+    ) {
+        AnimalDetection visionTopDetection = visionDetections.get(0);
+
+        // YOLO 요청이 실패했거나 없으면 Vision API 결과 사용
+        if (yoloRequestId == null) {
+            log.info("Using Vision API result (YOLO not available): {} ({})",
+                visionTopDetection.getLabel(), visionTopDetection.getConfidence());
+            return visionTopDetection;
+        }
+
+        // YOLO 결과 대기 (최대 5초)
+        com.example.demo.domain.dto.yolo.YoloCallbackRequest yoloResult = waitForYoloResult(yoloRequestId, 5000);
+
+        if (yoloResult == null || !"success".equals(yoloResult.getStatus())) {
+            log.info("Using Vision API result (YOLO timeout or error): {} ({})",
+                visionTopDetection.getLabel(), visionTopDetection.getConfidence());
+            return visionTopDetection;
+        }
+
+        // YOLO 결과를 AnimalDetection 리스트로 변환
+        List<AnimalDetection> yoloDetections = convertYoloToAnimalDetections(yoloResult);
+
+        if (yoloDetections.isEmpty()) {
+            log.info("Using Vision API result (YOLO no detection): {} ({})",
+                visionTopDetection.getLabel(), visionTopDetection.getConfidence());
+            return visionTopDetection;
+        }
+
+        // YOLO 탐지 결과를 DB에 저장
+        saveAiDetections(media, yoloDetections, "YOLO");
+
+        // 가장 신뢰도 높은 YOLO 탐지 추출
+        AnimalDetection yoloTopDetection = yoloDetections.get(0);
+
+        // YOLO 신뢰도가 90% 이상이면 YOLO 결과 사용
+        if (yoloTopDetection.getConfidence() >= 0.9f) {
+            log.info("Using YOLO result (confidence >= 90%): {} ({})",
+                yoloTopDetection.getLabel(), yoloTopDetection.getConfidence());
+            return yoloTopDetection;
+        }
+
+        // 그 외에는 Vision API 결과 사용
+        log.info("Using Vision API result (YOLO confidence < 90%): {} ({}) vs YOLO: {} ({})",
+            visionTopDetection.getLabel(), visionTopDetection.getConfidence(),
+            yoloTopDetection.getLabel(), yoloTopDetection.getConfidence());
+        return visionTopDetection;
+    }
+
+    /**
+     * YOLO 결과를 지정된 시간만큼 대기
+     *
+     * @param requestId YOLO 요청 ID
+     * @param timeoutMs 대기 시간 (밀리초)
+     * @return YOLO Callback 결과 (타임아웃 시 null)
+     */
+    private com.example.demo.domain.dto.yolo.YoloCallbackRequest waitForYoloResult(String requestId, long timeoutMs) {
+        long startTime = System.currentTimeMillis();
+        long pollInterval = 200; // 200ms마다 체크
+
+        while (System.currentTimeMillis() - startTime < timeoutMs) {
+            com.example.demo.domain.dto.yolo.YoloCallbackRequest result = yoloCallbackService.getResult(requestId);
+            if (result != null) {
+                yoloCallbackService.removeResult(requestId);
+                return result;
+            }
+
+            try {
+                Thread.sleep(pollInterval);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                log.warn("YOLO result wait interrupted");
+                return null;
+            }
+        }
+
+        log.warn("YOLO result timeout after {}ms for requestId: {}", timeoutMs, requestId);
+        return null;
+    }
+
+    /**
+     * YOLO Callback 결과를 AnimalDetection 리스트로 변환
+     *
+     * @param yoloResult YOLO Callback 결과
+     * @return AnimalDetection 리스트 (신뢰도 높은 순으로 정렬)
+     */
+    private List<AnimalDetection> convertYoloToAnimalDetections(com.example.demo.domain.dto.yolo.YoloCallbackRequest yoloResult) {
+        if (yoloResult.getResults() == null || yoloResult.getResults().isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+
+        com.example.demo.domain.dto.yolo.YoloCallbackRequest.Result firstResult = yoloResult.getResults().get(0);
+        if (firstResult.getDetections() == null || firstResult.getDetections().isEmpty()) {
+            return java.util.Collections.emptyList();
+        }
+
+        // 모든 YOLO 탐지 결과를 AnimalDetection으로 변환
+        List<AnimalDetection> detections = firstResult.getDetections().stream()
+            .map(detection -> {
+                // Bounding box 변환 (YOLO의 Float -> Vision의 Integer)
+                com.example.demo.domain.dto.vision.BoundingBox bbox = null;
+                if (detection.getBbox() != null) {
+                    bbox = com.example.demo.domain.dto.vision.BoundingBox.builder()
+                        .x1(detection.getBbox().getXMin() != null ? detection.getBbox().getXMin().intValue() : null)
+                        .y1(detection.getBbox().getYMin() != null ? detection.getBbox().getYMin().intValue() : null)
+                        .x2(detection.getBbox().getXMax() != null ? detection.getBbox().getXMax().intValue() : null)
+                        .y2(detection.getBbox().getYMax() != null ? detection.getBbox().getYMax().intValue() : null)
+                        .build();
+                }
+
+                // AnimalDetection으로 변환
+                return AnimalDetection.of(
+                    detection.getLabel(),
+                    detection.getConfidence(),
+                    detection.getLabel(),
+                    detection.getLabel(),  // YOLO는 학명을 제공하지 않으므로 label을 scientificName으로 사용
+                    bbox
+                );
+            })
+            .sorted(java.util.Comparator.comparing(AnimalDetection::getConfidence).reversed())
+            .collect(java.util.stream.Collectors.toList());
+
+        log.info("Converted {} YOLO detections to AnimalDetections", detections.size());
+        return detections;
     }
 
     /**
