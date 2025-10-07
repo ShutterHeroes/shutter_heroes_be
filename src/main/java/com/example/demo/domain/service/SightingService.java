@@ -12,15 +12,28 @@ import com.example.demo.domain.event.SpeciesProcessingEvent;
 import com.example.demo.domain.repository.AiDetectionRepository;
 import com.example.demo.domain.repository.MediaRepository;
 import com.example.demo.domain.repository.SightingRepository;
+import com.example.demo.domain.repository.projection.SightingDetailRow;
+import com.example.demo.domain.repository.projection.SightingListRow;
+import com.example.demo.domain.web.dto.SightingDeleteResponse;
+import com.example.demo.domain.web.dto.SightingDetailResponse;
+import com.example.demo.domain.web.dto.SightingListItemDto;
+import com.example.demo.domain.web.dto.SightingListResponse;
+import com.example.demo.domain.web.dto.SightingUpdateRequest;
+import com.example.demo.domain.web.dto.SightingUpdateResponse;
+import com.example.demo.exceptions.errorcode.SightingErrorCode;
+import com.example.demo.exceptions.exception.SightingException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Sighting 생성 및 관리를 담당하는 서비스
@@ -58,6 +71,127 @@ public class SightingService {
     private final ExifService exifService;
     private final ExifRemovalService exifRemovalService;
     private final ApplicationEventPublisher eventPublisher;
+
+    // ========== Public Methods (Controller 순서와 동일) ==========
+
+    /**
+     * Sighting 전체 목록 조회 (페이징, 검색)
+     *
+     * @param viewerIdNullable 로그인 사용자 ID (비로그인 시 null)
+     * @param keyword 검색어 (학명 또는 한국어 이름, 영어 이름. null이면 전체 조회)
+     * @param pageable 페이징 정보 (page, size, sort)
+     * @return 페이징 처리된 Sighting 목록
+     */
+    @Transactional(readOnly = true)
+    public SightingListResponse findAllSightings(
+        UUID viewerIdNullable,
+        String keyword,
+        Pageable pageable
+    ) {
+        // 검색어 정규화 (빈 문자열을 null로 변환)
+        String normalizedKeyword = (keyword == null || keyword.trim().isEmpty()) ? null : keyword.trim();
+
+        // Pageable에서 정렬 정보 추출
+        String sortBy = "created_at";  // 기본값
+        String sortOrder = "desc";     // 기본값
+
+        if (pageable.getSort().isSorted()) {
+            Sort.Order order = pageable.getSort().iterator().next();
+            sortBy = convertPropertyToColumn(order.getProperty());
+            sortOrder = order.isAscending() ? "asc" : "desc";
+        }
+
+        int page = pageable.getPageNumber();
+        int size = pageable.getPageSize();
+        int offset = page * size;
+
+        // 데이터 조회
+        List<SightingListRow> rows = sightingRepository.findAllWithSearch(
+            viewerIdNullable,
+            normalizedKeyword,
+            sortBy,
+            sortOrder,
+            size,
+            offset
+        );
+
+        // 전체 개수 조회
+        long totalElements = sightingRepository.countAllWithSearch(viewerIdNullable, normalizedKeyword);
+
+        // DTO 변환
+        List<SightingListItemDto> items = rows.stream()
+            .map(this::mapListRow)
+            .toList();
+
+        return SightingListResponse.of(items, totalElements, page, size);
+    }
+
+    /**
+     * Sighting 상세 조회
+     *
+     * @param sightingId Sighting ID
+     * @param viewerIdNullable 로그인 사용자 ID (비로그인 시 null)
+     * @return Sighting 상세 정보
+     */
+    @Transactional(readOnly = true)
+    public SightingDetailResponse findSightingDetail(UUID sightingId, UUID viewerIdNullable) {
+        SightingDetailRow row = sightingRepository.findDetailById(sightingId, viewerIdNullable)
+            .orElseThrow(() -> new SightingException(SightingErrorCode.NOT_FOUND));
+
+        return mapDetailRow(row, viewerIdNullable);
+    }
+
+    /**
+     * 내가 제보한 Sighting 목록 조회 (페이징, 검색)
+     *
+     * @param userId 조회할 사용자 ID
+     * @param keyword 검색어 (학명 또는 한국어 이름, 영어 이름. null이면 전체 조회)
+     * @param pageable 페이징 정보 (page, size, sort)
+     * @return 페이징 처리된 Sighting 목록
+     */
+    @Transactional(readOnly = true)
+    public SightingListResponse findMyReports(
+        UUID userId,
+        String keyword,
+        Pageable pageable
+    ) {
+        // 검색어 정규화 (빈 문자열을 null로 변환)
+        String normalizedKeyword = (keyword == null || keyword.trim().isEmpty()) ? null : keyword.trim();
+
+        // Pageable에서 정렬 정보 추출
+        String sortBy = "created_at";  // 기본값
+        String sortOrder = "desc";     // 기본값
+
+        if (pageable.getSort().isSorted()) {
+            Sort.Order order = pageable.getSort().iterator().next();
+            sortBy = convertPropertyToColumn(order.getProperty());
+            sortOrder = order.isAscending() ? "asc" : "desc";
+        }
+
+        int page = pageable.getPageNumber();
+        int size = pageable.getPageSize();
+        int offset = page * size;
+
+        // 데이터 조회
+        List<SightingListRow> rows = sightingRepository.findMyReports(
+            userId,
+            normalizedKeyword,
+            sortBy,
+            sortOrder,
+            size,
+            offset
+        );
+
+        // 전체 개수 조회
+        long totalElements = sightingRepository.countMyReports(userId, normalizedKeyword);
+
+        // DTO 변환
+        List<SightingListItemDto> items = rows.stream()
+            .map(this::mapListRow)
+            .toList();
+
+        return SightingListResponse.of(items, totalElements, page, size);
+    }
 
     /**
      * 이미지를 업로드하고 Sighting을 생성합니다.
@@ -148,6 +282,184 @@ public class SightingService {
 
         // 10. 사용자에게 즉시 응답 반환 (Species 처리는 백그라운드)
         return SightingCreateResult.of(sighting, media, detections, true);
+    }
+
+    /**
+     * Sighting 수정
+     *
+     * @param sightingId Sighting ID
+     * @param actorId 요청한 사용자 ID
+     * @param isAdmin 관리자 여부
+     * @param request 수정 요청 데이터
+     * @return 수정된 Sighting 정보
+     */
+    @Transactional
+    public SightingUpdateResponse updateSighting(
+        UUID sightingId,
+        UUID actorId,
+        boolean isAdmin,
+        SightingUpdateRequest request
+    ) {
+        // Sighting 조회
+        Sighting sighting = sightingRepository.findById(sightingId)
+            .orElseThrow(() -> new SightingException(SightingErrorCode.NOT_FOUND));
+
+        // 권한 검증 (소유자 또는 ADMIN)
+        if (!isAdmin && !sighting.getUser().getId().equals(actorId)) {
+            throw new SightingException(SightingErrorCode.FORBIDDEN);
+        }
+
+        // 엔티티 업데이트
+        sighting.update(request);
+
+        // 저장 (updated_at은 @PreUpdate로 자동 설정됨)
+        Sighting updated = sightingRepository.save(sighting);
+
+        log.info("Sighting updated: {} by user: {}", sightingId, actorId);
+
+        return SightingUpdateResponse.of(
+            updated.getId(),
+            updated.getTitle(),
+            updated.getDescription(),
+            updated.getVisibility().name(),
+            updated.getOccurredAt(),
+            updated.getAddressText(),
+            updated.getUpdatedAt()
+        );
+    }
+
+    /**
+     * Sighting 삭제
+     *
+     * @param sightingId 삭제할 Sighting ID
+     * @param actorId 요청자 ID
+     * @param isAdmin ADMIN 권한 여부
+     * @return SightingDeleteResponse
+     */
+    @Transactional
+    public SightingDeleteResponse deleteSighting(
+        UUID sightingId,
+        UUID actorId,
+        boolean isAdmin
+    ) {
+        // Sighting 조회
+        Sighting sighting = sightingRepository.findById(sightingId)
+            .orElseThrow(() -> new SightingException(SightingErrorCode.NOT_FOUND));
+
+        // 권한 검증 (소유자 또는 ADMIN)
+        if (!isAdmin && !sighting.getUser().getId().equals(actorId)) {
+            throw new SightingException(SightingErrorCode.FORBIDDEN);
+        }
+
+        // Sighting 삭제
+        sightingRepository.delete(sighting);
+
+        log.info("Sighting deleted: {} by user: {}", sightingId, actorId);
+
+        return SightingDeleteResponse.of(sightingId);
+    }
+
+    // ========== Private Helper Methods ==========
+
+    /**
+     * Entity 속성명을 DB 컬럼명으로 변환
+     * (camelCase -> snake_case)
+     */
+    private String convertPropertyToColumn(String property) {
+        return switch (property) {
+            case "createdAt" -> "created_at";
+            case "occurredAt" -> "occurred_at";
+            default -> "created_at";
+        };
+    }
+
+    private SightingListItemDto mapListRow(SightingListRow r) {
+        return new SightingListItemDto(
+            r.getId(),
+            r.getTitle(),
+            r.getDescription(),
+            r.getOccurredAt(),
+            r.getDetectedBy(),
+            r.getAiConfidence(),
+            r.getVisibility(),
+            r.getIsVerified(),
+            r.getCreatedAt(),
+            r.getUpdatedAt(),
+            r.getDisplayName(),
+            r.getCommonNameKo(),
+            r.getCommonNameEn(),
+            r.getScientificName(),
+            r.getStatus(),
+            r.getSanitizedUrl(),
+            r.getGeom()
+        );
+    }
+
+    private SightingDetailResponse mapDetailRow(SightingDetailRow r, UUID viewerId) {
+        // User 정보
+        SightingDetailResponse.UserInfo userInfo = new SightingDetailResponse.UserInfo(
+            r.getUserId(),
+            r.getDisplayName(),
+            r.getUserEmail()
+        );
+
+        // Species 정보 (없을 수 있음)
+        SightingDetailResponse.SpeciesInfo speciesInfo = null;
+        if (r.getSpeciesId() != null) {
+            speciesInfo = new SightingDetailResponse.SpeciesInfo(
+                r.getSpeciesId(),
+                r.getCommonNameKo(),
+                r.getCommonNameEn(),
+                r.getScientificName(),
+                r.getStatus()
+            );
+        }
+
+        // EXIF 정보
+        SightingDetailResponse.ExifInfo exifInfo = new SightingDetailResponse.ExifInfo(
+            r.getCameraMake(),
+            r.getCameraModel(),
+            r.getCapturedAt(),
+            r.getGpsLatitude(),
+            r.getGpsLongitude()
+        );
+
+        // Media 정보 (없을 수 있음)
+        SightingDetailResponse.MediaInfo mediaInfo = null;
+        if (r.getMediaId() != null) {
+            // 소유자인 경우에만 storagePath(원본) 제공
+            boolean isOwner = viewerId != null && viewerId.equals(r.getUserId());
+            String storagePath = isOwner ? r.getStoragePath() : null;
+
+            mediaInfo = new SightingDetailResponse.MediaInfo(
+                r.getMediaId(),
+                r.getSanitizedUrl(),
+                storagePath,
+                r.getMimeType(),
+                r.getBytes(),
+                r.getWidth(),
+                r.getHeight(),
+                exifInfo
+            );
+        }
+
+        return new SightingDetailResponse(
+            r.getId(),
+            r.getTitle(),
+            r.getDescription(),
+            r.getOccurredAt(),
+            r.getDetectedBy(),
+            r.getAiConfidence(),
+            r.getVisibility(),
+            r.getIsVerified(),
+            r.getAddressText(),
+            r.getCreatedAt(),
+            r.getUpdatedAt(),
+            userInfo,
+            speciesInfo,
+            mediaInfo,
+            r.getGeom()
+        );
     }
 
     /**

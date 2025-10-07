@@ -66,6 +66,9 @@ public class UserService {
         removeCookie(response, JwtRule.ACCESS_PREFIX.getValue());
         removeCookie(response, JwtRule.REFRESH_PREFIX.getValue());
 
+        // JSESSIONID 쿠키도 제거 (Spring Security 세션 쿠키)
+        removeCookie(response, "JSESSIONID");
+
         log.info("User logout successful");
     }
 

@@ -4,6 +4,9 @@ import com.example.demo.domain.converter.DetectedByConverter;
 import com.example.demo.domain.converter.VisibilityConverter;
 import com.example.demo.domain.enums.DetectedBy;
 import com.example.demo.domain.enums.Visibility;
+import com.example.demo.domain.web.dto.SightingUpdateRequest;
+import com.example.demo.exceptions.errorcode.SightingErrorCode;
+import com.example.demo.exceptions.exception.SightingException;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -11,6 +14,7 @@ import lombok.Setter;
 import org.hibernate.annotations.ColumnTransformer;
 import org.hibernate.annotations.UuidGenerator;
 import org.locationtech.jts.geom.Point;
+import org.springframework.util.StringUtils;
 
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
@@ -92,5 +96,50 @@ public class Sighting {
     @PreUpdate
     protected void onUpdate() {
         updatedAt = LocalDateTime.now();
+    }
+
+    /**
+     * Sighting 정보 업데이트
+     *
+     * @param request 업데이트 요청 DTO
+     */
+    public void update(SightingUpdateRequest request) {
+        // title 업데이트
+        if (request.getTitle() != null) {
+            this.title = request.getTitle();
+        }
+
+        // description 업데이트
+        if (request.getDescription() != null) {
+            this.description = request.getDescription();
+        }
+
+        // visibility 업데이트
+        if (StringUtils.hasText(request.getVisibility())) {
+            this.visibility = parseVisibility(request.getVisibility());
+        }
+
+        // occurredAt 업데이트
+        if (request.getOccurredAt() != null) {
+            this.occurredAt = request.getOccurredAt();
+        }
+
+        // addressText 업데이트
+        if (request.getAddressText() != null) {
+            this.addressText = request.getAddressText();
+        }
+
+        // updatedAt은 @PreUpdate에서 자동 설정됨
+    }
+
+    /**
+     * 문자열을 Visibility enum으로 변환
+     */
+    private Visibility parseVisibility(String visibility) {
+        try {
+            return Visibility.valueOf(visibility.toUpperCase());
+        } catch (IllegalArgumentException e) {
+            throw new SightingException(SightingErrorCode.INVALID_VISIBILITY);
+        }
     }
 }

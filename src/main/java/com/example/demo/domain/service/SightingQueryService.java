@@ -17,7 +17,7 @@ public class SightingQueryService {
 
     private static final double DEFAULT_RADIUS_M = 500.0;
     private static final double MIN_RADIUS_M = 10.0;
-    private static final double MAX_RADIUS_M = 20000.0;
+    private static final double MAX_RADIUS_M = 5000000.0; // 최대 500KM 반경 조회 가능
 
     private final SightingRepository sightingRepository;
 
