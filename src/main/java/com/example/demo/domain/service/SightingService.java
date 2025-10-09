@@ -611,15 +611,35 @@ public class SightingService {
             aiDetection.setExtraInfo(extraInfo);
 
             // Bounding box 설정 (YOLO의 경우 있을 수 있음)
+            // 데이터베이스 제약 조건: 바운딩 박스 좌표는 0~1 사이의 정규화된 값이어야 함
             if (detection.getBoundingBox() != null) {
-                aiDetection.setXMin(detection.getBoundingBox().getX1() != null
-                    ? BigDecimal.valueOf(detection.getBoundingBox().getX1()) : null);
-                aiDetection.setYMin(detection.getBoundingBox().getY1() != null
-                    ? BigDecimal.valueOf(detection.getBoundingBox().getY1()) : null);
-                aiDetection.setXMax(detection.getBoundingBox().getX2() != null
-                    ? BigDecimal.valueOf(detection.getBoundingBox().getX2()) : null);
-                aiDetection.setYMax(detection.getBoundingBox().getY2() != null
-                    ? BigDecimal.valueOf(detection.getBoundingBox().getY2()) : null);
+                Integer x1 = detection.getBoundingBox().getX1();
+                Integer y1 = detection.getBoundingBox().getY1();
+                Integer x2 = detection.getBoundingBox().getX2();
+                Integer y2 = detection.getBoundingBox().getY2();
+
+                // 좌표가 픽셀 좌표인지 정규화된 좌표인지 판단
+                // 픽셀 좌표: 1보다 큰 값 → 이미지 크기로 나눠서 정규화 필요
+                // 정규화된 좌표: 0~1 사이 → 그대로 사용
+                boolean isPixelCoordinate = (x1 != null && x1 > 1) || (y1 != null && y1 > 1)
+                    || (x2 != null && x2 > 1) || (y2 != null && y2 > 1);
+
+                if (isPixelCoordinate && media.getWidth() != null && media.getHeight() != null) {
+                    // 픽셀 좌표를 정규화된 좌표(0~1)로 변환
+                    Integer imageWidth = media.getWidth();
+                    Integer imageHeight = media.getHeight();
+
+                    aiDetection.setXMin(x1 != null ? BigDecimal.valueOf((double) x1 / imageWidth) : null);
+                    aiDetection.setYMin(y1 != null ? BigDecimal.valueOf((double) y1 / imageHeight) : null);
+                    aiDetection.setXMax(x2 != null ? BigDecimal.valueOf((double) x2 / imageWidth) : null);
+                    aiDetection.setYMax(y2 != null ? BigDecimal.valueOf((double) y2 / imageHeight) : null);
+                } else {
+                    // 이미 정규화된 좌표 (0~1) → 그대로 사용
+                    aiDetection.setXMin(x1 != null ? BigDecimal.valueOf(x1) : null);
+                    aiDetection.setYMin(y1 != null ? BigDecimal.valueOf(y1) : null);
+                    aiDetection.setXMax(x2 != null ? BigDecimal.valueOf(x2) : null);
+                    aiDetection.setYMax(y2 != null ? BigDecimal.valueOf(y2) : null);
+                }
             } else {
                 aiDetection.setXMin(null);
                 aiDetection.setYMin(null);
