@@ -2,6 +2,7 @@ package com.example.demo.domain.service;
 
 import com.example.demo.domain.dto.exif.ExifMetadata;
 import com.example.demo.domain.dto.vision.AnimalDetection;
+import com.example.demo.domain.dto.yolo.YoloInferResponse;
 import com.example.demo.domain.entity.AiDetection;
 import com.example.demo.domain.entity.Media;
 import com.example.demo.domain.entity.Sighting;
@@ -640,8 +641,7 @@ public class SightingService {
     private String requestYoloInference(String sanitizedImageUrl) {
         log.info("Starting YOLO inference request for image: {}", sanitizedImageUrl);
         try {
-            com.example.demo.domain.dto.yolo.YoloInferResponse response =
-                yoloInferenceService.requestInference(java.util.List.of(sanitizedImageUrl));
+            YoloInferResponse response = yoloInferenceService.requestInference(List.of(sanitizedImageUrl));
             log.info("YOLO inference requested successfully: requestId={}", response.getRequestId());
             return response.getRequestId();
         } catch (Exception e) {

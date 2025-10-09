@@ -29,11 +29,24 @@ public class YoloCallbackController {
      */
     @PostMapping("/yolo/callback")
     @Operation(summary = "YOLO 추론 결과 Callback", description = "FastAPI YOLO 서버가 추론 완료 후 결과를 전송하는 엔드포인트")
-    public ResponseEntity<Void> handleYoloCallback(@RequestBody YoloCallbackRequest callbackRequest) {
-        log.info("Received YOLO callback: requestId={}, status={}",
-            callbackRequest.getRequestId(), callbackRequest.getStatus());
+    public ResponseEntity<Void> handleYoloCallback(@RequestBody String rawJson) {
+        log.info("Received YOLO callback (raw JSON): {}", rawJson);
 
-        yoloCallbackService.processCallback(callbackRequest);
+        try {
+            // JSON 파싱 시도
+            com.fasterxml.jackson.databind.ObjectMapper objectMapper = new com.fasterxml.jackson.databind.ObjectMapper();
+            YoloCallbackRequest callbackRequest = objectMapper.readValue(rawJson, YoloCallbackRequest.class);
+
+            log.info("Parsed YOLO callback: requestId={}, status={}, results={}, errorMessage={}",
+                callbackRequest.getRequestId(),
+                callbackRequest.getStatus(),
+                callbackRequest.getResults() != null ? callbackRequest.getResults().size() : 0,
+                callbackRequest.getErrorMessage());
+
+            yoloCallbackService.processCallback(callbackRequest);
+        } catch (Exception e) {
+            log.error("Failed to parse YOLO callback JSON: {}", e.getMessage(), e);
+        }
 
         return ResponseEntity.ok().build();
     }

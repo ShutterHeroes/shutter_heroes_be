@@ -86,6 +86,8 @@ public class SecurityConfiguration {
                     // AI 관련 API
                     auth.requestMatchers(HttpMethod.POST, "/api/v1/ai/animal/description").authenticated();
                     auth.requestMatchers(HttpMethod.GET, "/api/v1/ai/config").authenticated();
+                    // YOLO Callback은 FastAPI 서버가 호출하므로 인증 예외
+                    auth.requestMatchers(HttpMethod.POST, "/api/v1/yolo/callback").permitAll();
                     // Swagger UI 경로 허용 (기본 생성 문서)
                     auth.requestMatchers("/swagger-ui/**", "/swagger-ui.html", "/v3/api-docs/**", "/swagger-resources/**", "/webjars/**", "/favicon.ico").permitAll();
 
