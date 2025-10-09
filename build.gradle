@@ -54,6 +54,8 @@ dependencies {
 	implementation 'software.amazon.awssdk:s3:2.20.26'
 	// Metadata Extractor for EXIF data
 	implementation 'com.drewnoakes:metadata-extractor:2.19.0'
+	// WebP ImageIO support for reading and writing WebP images
+	implementation 'org.sejda.imageio:webp-imageio:0.1.6'
 }
 
 tasks.named('test') {
