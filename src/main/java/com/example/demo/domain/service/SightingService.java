@@ -636,13 +636,14 @@ public class SightingService {
      * @return YOLO 요청 ID (실패 시 null)
      */
     private String requestYoloInference(String sanitizedImageUrl) {
+        log.info("Starting YOLO inference request for image: {}", sanitizedImageUrl);
         try {
             com.example.demo.domain.dto.yolo.YoloInferResponse response =
                 yoloInferenceService.requestInference(java.util.List.of(sanitizedImageUrl));
-            log.info("YOLO inference requested: requestId={}", response.getRequestId());
+            log.info("YOLO inference requested successfully: requestId={}", response.getRequestId());
             return response.getRequestId();
         } catch (Exception e) {
-            log.warn("Failed to request YOLO inference: {}. Continuing with Vision API result only.", e.getMessage());
+            log.warn("Failed to request YOLO inference: {}. Continuing with Vision API result only.", e.getMessage(), e);
             return null;
         }
     }
@@ -664,17 +665,24 @@ public class SightingService {
 
         // YOLO 요청이 실패했거나 없으면 Vision API 결과 사용
         if (yoloRequestId == null) {
-            log.info("Using Vision API result (YOLO not available): {} ({})",
+            log.info("Using Vision API result (YOLO not available): {} (confidence: {})",
                 visionTopDetection.getLabel(), visionTopDetection.getConfidence());
             return visionTopDetection;
         }
 
         // YOLO 결과 대기 (최대 5초)
+        log.info("Waiting for YOLO result (requestId: {}, timeout: 5000ms)...", yoloRequestId);
         com.example.demo.domain.dto.yolo.YoloCallbackRequest yoloResult = waitForYoloResult(yoloRequestId, 5000);
 
-        if (yoloResult == null || !"success".equals(yoloResult.getStatus())) {
-            log.info("Using Vision API result (YOLO timeout or error): {} ({})",
+        if (yoloResult == null) {
+            log.warn("YOLO result timeout. Using Vision API result: {} (confidence: {})",
                 visionTopDetection.getLabel(), visionTopDetection.getConfidence());
+            return visionTopDetection;
+        }
+
+        if (!"success".equals(yoloResult.getStatus())) {
+            log.warn("YOLO inference failed (status: {}). Using Vision API result: {} (confidence: {})",
+                yoloResult.getStatus(), visionTopDetection.getLabel(), visionTopDetection.getConfidence());
             return visionTopDetection;
         }
 
@@ -682,7 +690,7 @@ public class SightingService {
         List<AnimalDetection> yoloDetections = convertYoloToAnimalDetections(yoloResult);
 
         if (yoloDetections.isEmpty()) {
-            log.info("Using Vision API result (YOLO no detection): {} ({})",
+            log.info("YOLO detected no animals. Using Vision API result: {} (confidence: {})",
                 visionTopDetection.getLabel(), visionTopDetection.getConfidence());
             return visionTopDetection;
         }
@@ -695,14 +703,15 @@ public class SightingService {
 
         // YOLO 신뢰도가 임계값 이상이면 YOLO 결과 사용
         if (yoloTopDetection.getConfidence() >= yoloConfidenceThreshold) {
-            log.info("Using YOLO result (confidence >= {}): {} ({})",
-                yoloConfidenceThreshold, yoloTopDetection.getLabel(), yoloTopDetection.getConfidence());
+            log.info("✓ Using YOLO result (confidence {} >= threshold {}): {} (confidence: {})",
+                yoloTopDetection.getConfidence(), yoloConfidenceThreshold,
+                yoloTopDetection.getLabel(), yoloTopDetection.getConfidence());
             return yoloTopDetection;
         }
 
         // 그 외에는 Vision API 결과 사용
-        log.info("Using Vision API result (YOLO confidence < {}): {} ({}) vs YOLO: {} ({})",
-            yoloConfidenceThreshold,
+        log.info("✓ Using Vision API result (YOLO confidence {} < threshold {}): Vision={} ({}) vs YOLO={} ({})",
+            yoloTopDetection.getConfidence(), yoloConfidenceThreshold,
             visionTopDetection.getLabel(), visionTopDetection.getConfidence(),
             yoloTopDetection.getLabel(), yoloTopDetection.getConfidence());
         return visionTopDetection;
