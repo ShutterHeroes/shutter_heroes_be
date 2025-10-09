@@ -2,6 +2,8 @@ package com.example.demo.domain.service;
 
 import com.example.demo.domain.dto.exif.ExifMetadata;
 import com.example.demo.domain.dto.vision.AnimalDetection;
+import com.example.demo.domain.dto.yolo.YoloCallbackRequest;
+import com.example.demo.domain.dto.yolo.YoloInferResponse;
 import com.example.demo.domain.entity.AiDetection;
 import com.example.demo.domain.entity.Media;
 import com.example.demo.domain.entity.Sighting;
@@ -24,6 +26,7 @@ import com.example.demo.exceptions.errorcode.SightingErrorCode;
 import com.example.demo.exceptions.exception.SightingException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -32,6 +35,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -73,6 +77,9 @@ public class SightingService {
     private final ExifService exifService;
     private final ExifRemovalService exifRemovalService;
     private final ApplicationEventPublisher eventPublisher;
+
+    @Value("${yolo.confidence.threshold:0.9}")
+    private float yoloConfidenceThreshold;
 
     // ========== Public Methods (Controller 순서와 동일) ==========
 
@@ -551,6 +558,7 @@ public class SightingService {
         sighting.setAiConfidence(confidence != null ? BigDecimal.valueOf(confidence) : null);
         sighting.setVisibility(Visibility.PUBLIC);
         sighting.setIsVerified(false);
+        sighting.setUpdatedAt(LocalDateTime.now());
 
         // EXIF GPS 정보가 있으면 설정
         if (exifMetadata.getGpsLocation() != null) {
@@ -632,13 +640,13 @@ public class SightingService {
      * @return YOLO 요청 ID (실패 시 null)
      */
     private String requestYoloInference(String sanitizedImageUrl) {
+        log.info("Starting YOLO inference request for image: {}", sanitizedImageUrl);
         try {
-            com.example.demo.domain.dto.yolo.YoloInferResponse response =
-                yoloInferenceService.requestInference(java.util.List.of(sanitizedImageUrl));
-            log.info("YOLO inference requested: requestId={}", response.getRequestId());
+            YoloInferResponse response = yoloInferenceService.requestInference(List.of(sanitizedImageUrl));
+            log.info("YOLO inference requested successfully: requestId={}", response.getRequestId());
             return response.getRequestId();
         } catch (Exception e) {
-            log.warn("Failed to request YOLO inference: {}. Continuing with Vision API result only.", e.getMessage());
+            log.warn("Failed to request YOLO inference: {}. Continuing with Vision API result only.", e.getMessage(), e);
             return null;
         }
     }
@@ -660,17 +668,24 @@ public class SightingService {
 
         // YOLO 요청이 실패했거나 없으면 Vision API 결과 사용
         if (yoloRequestId == null) {
-            log.info("Using Vision API result (YOLO not available): {} ({})",
+            log.info("Using Vision API result (YOLO not available): {} (confidence: {})",
                 visionTopDetection.getLabel(), visionTopDetection.getConfidence());
             return visionTopDetection;
         }
 
         // YOLO 결과 대기 (최대 5초)
-        com.example.demo.domain.dto.yolo.YoloCallbackRequest yoloResult = waitForYoloResult(yoloRequestId, 5000);
+        log.info("Waiting for YOLO result (requestId: {}, timeout: 5000ms)...", yoloRequestId);
+        YoloCallbackRequest yoloResult = waitForYoloResult(yoloRequestId, 5000);
 
-        if (yoloResult == null || !"success".equals(yoloResult.getStatus())) {
-            log.info("Using Vision API result (YOLO timeout or error): {} ({})",
+        if (yoloResult == null) {
+            log.warn("YOLO result timeout. Using Vision API result: {} (confidence: {})",
                 visionTopDetection.getLabel(), visionTopDetection.getConfidence());
+            return visionTopDetection;
+        }
+
+        if (!"success".equals(yoloResult.getStatus())) {
+            log.warn("YOLO inference failed (status: {}). Using Vision API result: {} (confidence: {})",
+                yoloResult.getStatus(), visionTopDetection.getLabel(), visionTopDetection.getConfidence());
             return visionTopDetection;
         }
 
@@ -678,7 +693,7 @@ public class SightingService {
         List<AnimalDetection> yoloDetections = convertYoloToAnimalDetections(yoloResult);
 
         if (yoloDetections.isEmpty()) {
-            log.info("Using Vision API result (YOLO no detection): {} ({})",
+            log.info("YOLO detected no animals. Using Vision API result: {} (confidence: {})",
                 visionTopDetection.getLabel(), visionTopDetection.getConfidence());
             return visionTopDetection;
         }
@@ -689,15 +704,17 @@ public class SightingService {
         // 가장 신뢰도 높은 YOLO 탐지 추출
         AnimalDetection yoloTopDetection = yoloDetections.get(0);
 
-        // YOLO 신뢰도가 90% 이상이면 YOLO 결과 사용
-        if (yoloTopDetection.getConfidence() >= 0.9f) {
-            log.info("Using YOLO result (confidence >= 90%): {} ({})",
+        // YOLO 신뢰도가 임계값 이상이면 YOLO 결과 사용
+        if (yoloTopDetection.getConfidence() >= yoloConfidenceThreshold) {
+            log.info("✓ Using YOLO result (confidence {} >= threshold {}): {} (confidence: {})",
+                yoloTopDetection.getConfidence(), yoloConfidenceThreshold,
                 yoloTopDetection.getLabel(), yoloTopDetection.getConfidence());
             return yoloTopDetection;
         }
 
         // 그 외에는 Vision API 결과 사용
-        log.info("Using Vision API result (YOLO confidence < 90%): {} ({}) vs YOLO: {} ({})",
+        log.info("✓ Using Vision API result (YOLO confidence {} < threshold {}): Vision={} ({}) vs YOLO={} ({})",
+            yoloTopDetection.getConfidence(), yoloConfidenceThreshold,
             visionTopDetection.getLabel(), visionTopDetection.getConfidence(),
             yoloTopDetection.getLabel(), yoloTopDetection.getConfidence());
         return visionTopDetection;
@@ -764,12 +781,17 @@ public class SightingService {
                         .build();
                 }
 
+                // YOLO label의 언더바를 공백으로 변환 (예: Larus_crassirostris → Larus crassirostris)
+                String scientificName = detection.getLabel() != null
+                    ? detection.getLabel().replace("_", " ")
+                    : null;
+
                 // AnimalDetection으로 변환
                 return AnimalDetection.of(
-                    detection.getLabel(),
+                    detection.getLabel(),       // 원본 label (표시용)
                     detection.getConfidence(),
-                    detection.getLabel(),
-                    detection.getLabel(),  // YOLO는 학명을 제공하지 않으므로 label을 scientificName으로 사용
+                    detection.getLabel(),       // description
+                    scientificName,             // scientificName (언더바 → 공백)
                     bbox
                 );
             })

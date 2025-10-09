@@ -74,6 +74,9 @@ services:
       # OpenAI
       - OPENAI_API_KEY=${OPENAI_API_KEY}
 
+      # YOLO
+      - YOLO_CONFIDENCE_THRESHOLD=${YOLO_CONFIDENCE_THRESHOLD:-0.8}
+
     restart: unless-stopped
     networks:
       - app-network

@@ -30,14 +30,22 @@ public class YoloCallbackService {
         String requestId = callbackRequest.getRequestId();
 
         if ("success".equals(callbackRequest.getStatus())) {
-            log.info("YOLO inference succeeded for requestId: {}, detections: {}",
-                requestId,
-                callbackRequest.getResults() != null && !callbackRequest.getResults().isEmpty()
-                    ? callbackRequest.getResults().get(0).getDetections().size()
-                    : 0);
+            int detectionCount = 0;
+            if (callbackRequest.getResults() != null && !callbackRequest.getResults().isEmpty()) {
+                detectionCount = callbackRequest.getResults().get(0).getDetections().size();
+            }
+
+            log.info("YOLO inference succeeded for requestId: {}, detections: {}, status: {}",
+                requestId, detectionCount, callbackRequest.getStatus());
+
+            // 첫 번째 detection 정보 로깅
+            if (detectionCount > 0) {
+                YoloCallbackRequest.Detection topDetection = callbackRequest.getResults().get(0).getDetections().get(0);
+                log.info("YOLO top detection: label={}, score={}", topDetection.getLabel(), topDetection.getConfidence());
+            }
         } else {
-            log.error("YOLO inference failed for requestId: {}, error: {}",
-                requestId, callbackRequest.getErrorMessage());
+            log.error("YOLO inference failed for requestId: {}, status: {}, error: {}",
+                requestId, callbackRequest.getStatus(), callbackRequest.getErrorMessage());
         }
 
         // 결과 저장
