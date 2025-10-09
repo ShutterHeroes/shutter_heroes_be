@@ -2,6 +2,7 @@ package com.example.demo.domain.service;
 
 import com.example.demo.domain.dto.exif.ExifMetadata;
 import com.example.demo.domain.dto.vision.AnimalDetection;
+import com.example.demo.domain.dto.yolo.YoloCallbackRequest;
 import com.example.demo.domain.dto.yolo.YoloInferResponse;
 import com.example.demo.domain.entity.AiDetection;
 import com.example.demo.domain.entity.Media;
@@ -674,7 +675,7 @@ public class SightingService {
 
         // YOLO 결과 대기 (최대 5초)
         log.info("Waiting for YOLO result (requestId: {}, timeout: 5000ms)...", yoloRequestId);
-        com.example.demo.domain.dto.yolo.YoloCallbackRequest yoloResult = waitForYoloResult(yoloRequestId, 5000);
+        YoloCallbackRequest yoloResult = waitForYoloResult(yoloRequestId, 5000);
 
         if (yoloResult == null) {
             log.warn("YOLO result timeout. Using Vision API result: {} (confidence: {})",
@@ -780,12 +781,17 @@ public class SightingService {
                         .build();
                 }
 
+                // YOLO label의 언더바를 공백으로 변환 (예: Larus_crassirostris → Larus crassirostris)
+                String scientificName = detection.getLabel() != null
+                    ? detection.getLabel().replace("_", " ")
+                    : null;
+
                 // AnimalDetection으로 변환
                 return AnimalDetection.of(
-                    detection.getLabel(),
+                    detection.getLabel(),       // 원본 label (표시용)
                     detection.getConfidence(),
-                    detection.getLabel(),
-                    detection.getLabel(),  // YOLO는 학명을 제공하지 않으므로 label을 scientificName으로 사용
+                    detection.getLabel(),       // description
+                    scientificName,             // scientificName (언더바 → 공백)
                     bbox
                 );
             })

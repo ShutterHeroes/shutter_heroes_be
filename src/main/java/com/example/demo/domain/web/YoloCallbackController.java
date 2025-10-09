@@ -24,7 +24,7 @@ public class YoloCallbackController {
     /**
      * FastAPI YOLO 서버로부터 추론 결과를 받는 Callback 엔드포인트
      *
-     * @param callbackRequest YOLO 추론 결과
+     * String rawJson 형태로 수신하여 로그에 기록하고, YoloCallbackRequest로 파싱을 시도합니다.
      * @return 200 OK
      */
     @PostMapping("/yolo/callback")
