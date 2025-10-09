@@ -24,6 +24,7 @@ import com.example.demo.exceptions.errorcode.SightingErrorCode;
 import com.example.demo.exceptions.exception.SightingException;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -73,6 +74,9 @@ public class SightingService {
     private final ExifService exifService;
     private final ExifRemovalService exifRemovalService;
     private final ApplicationEventPublisher eventPublisher;
+
+    @Value("${yolo.confidence.threshold:0.9}")
+    private float yoloConfidenceThreshold;
 
     // ========== Public Methods (Controller 순서와 동일) ==========
 
@@ -689,15 +693,16 @@ public class SightingService {
         // 가장 신뢰도 높은 YOLO 탐지 추출
         AnimalDetection yoloTopDetection = yoloDetections.get(0);
 
-        // YOLO 신뢰도가 90% 이상이면 YOLO 결과 사용
-        if (yoloTopDetection.getConfidence() >= 0.9f) {
-            log.info("Using YOLO result (confidence >= 90%): {} ({})",
-                yoloTopDetection.getLabel(), yoloTopDetection.getConfidence());
+        // YOLO 신뢰도가 임계값 이상이면 YOLO 결과 사용
+        if (yoloTopDetection.getConfidence() >= yoloConfidenceThreshold) {
+            log.info("Using YOLO result (confidence >= {}): {} ({})",
+                yoloConfidenceThreshold, yoloTopDetection.getLabel(), yoloTopDetection.getConfidence());
             return yoloTopDetection;
         }
 
         // 그 외에는 Vision API 결과 사용
-        log.info("Using Vision API result (YOLO confidence < 90%): {} ({}) vs YOLO: {} ({})",
+        log.info("Using Vision API result (YOLO confidence < {}): {} ({}) vs YOLO: {} ({})",
+            yoloConfidenceThreshold,
             visionTopDetection.getLabel(), visionTopDetection.getConfidence(),
             yoloTopDetection.getLabel(), yoloTopDetection.getConfidence());
         return visionTopDetection;
