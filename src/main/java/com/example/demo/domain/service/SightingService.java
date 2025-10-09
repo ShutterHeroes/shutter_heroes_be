@@ -33,6 +33,7 @@ import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.multipart.MultipartFile;
 
 import java.math.BigDecimal;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.UUID;
 
@@ -555,6 +556,7 @@ public class SightingService {
         sighting.setAiConfidence(confidence != null ? BigDecimal.valueOf(confidence) : null);
         sighting.setVisibility(Visibility.PUBLIC);
         sighting.setIsVerified(false);
+        sighting.setUpdatedAt(LocalDateTime.now());
 
         // EXIF GPS 정보가 있으면 설정
         if (exifMetadata.getGpsLocation() != null) {
