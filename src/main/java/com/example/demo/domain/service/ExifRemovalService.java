@@ -48,7 +48,7 @@ public class ExifRemovalService {
      * <ol>
      *   <li>원본 이미지를 BufferedImage로 읽음</li>
      *   <li>EXIF 메타데이터 없이 새로운 이미지로 인코딩</li>
-     *   <li>PNG 형식으로 저장 (메타데이터 없음 보장)</li>
+     *   <li>원본 형식 유지 (JPEG, PNG, WebP 등)</li>
      * </ol>
      *
      * @param imageFile 원본 이미지 파일
@@ -59,33 +59,44 @@ public class ExifRemovalService {
         try {
             log.info("Removing EXIF metadata from image: {}", imageFile.getOriginalFilename());
 
-            // 1. 원본 이미지를 BufferedImage로 읽기
+            // 1. 이미지 형식 확인
+            String formatName = getImageFormat(imageFile);
+            log.info("Detected image format: {}", formatName);
+
+            // 2. 원본 이미지를 BufferedImage로 읽기
             BufferedImage image = ImageIO.read(imageFile.getInputStream());
 
             if (image == null) {
+                log.error("Failed to read image file: {}. Format: {}",
+                    imageFile.getOriginalFilename(), formatName);
                 throw new FileException(FileErrorCode.INVALID_FILE_TYPE);
             }
 
-            // 2. EXIF 메타데이터 없이 새로운 이미지로 저장
+            // 3. EXIF 메타데이터 없이 새로운 이미지로 저장
             ByteArrayOutputStream outputStream = new ByteArrayOutputStream();
 
-            // JPEG 형식 유지 (품질 손실 최소화)
-            String formatName = getImageFormat(imageFile);
-
+            // 형식별로 적절한 포맷으로 저장
             if ("jpeg".equalsIgnoreCase(formatName) || "jpg".equalsIgnoreCase(formatName)) {
                 // JPEG로 저장 (EXIF 없이)
                 ImageIO.write(image, "jpg", outputStream);
+            } else if ("webp".equalsIgnoreCase(formatName)) {
+                // WebP로 저장 (EXIF 없이)
+                ImageIO.write(image, "webp", outputStream);
+            } else if ("png".equalsIgnoreCase(formatName)) {
+                // PNG로 저장 (메타데이터 없음 보장)
+                ImageIO.write(image, "png", outputStream);
             } else {
-                // 기타 형식은 PNG로 저장 (메타데이터 없음 보장)
+                // 기타 형식은 PNG로 변환하여 저장
+                log.info("Converting {} to PNG format for EXIF removal", formatName);
                 ImageIO.write(image, "png", outputStream);
             }
 
             byte[] sanitizedImageBytes = outputStream.toByteArray();
 
-            log.info("EXIF metadata removed successfully. Original size: {} bytes, Sanitized size: {} bytes",
-                imageFile.getSize(), sanitizedImageBytes.length);
+            log.info("EXIF metadata removed successfully. Original size: {} bytes, Sanitized size: {} bytes, Format: {}",
+                imageFile.getSize(), sanitizedImageBytes.length, formatName);
 
-            // 3. 검증: EXIF가 제거되었는지 확인
+            // 4. 검증: EXIF가 제거되었는지 확인
             verifyExifRemoval(sanitizedImageBytes);
 
             return sanitizedImageBytes;

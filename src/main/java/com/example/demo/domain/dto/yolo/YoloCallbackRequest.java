@@ -86,7 +86,17 @@ public class YoloCallbackRequest {
 
         private Map<String, Object> probs;
 
-        private List<Detection> preds;  // FastAPI는 "preds" 필드 사용
+        private List<Detection> preds;  // 이전 버전 호환성
+
+        private List<Detection> detections;  // 새 버전 YOLO 응답 형식
+
+        // preds 또는 detections 중 하나 반환
+        public List<Detection> getPreds() {
+            if (detections != null && !detections.isEmpty()) {
+                return detections;
+            }
+            return preds != null ? preds : List.of();
+        }
     }
 
     @Getter
@@ -103,11 +113,27 @@ public class YoloCallbackRequest {
         private Float score;            // FastAPI는 "score" 필드 사용
         private Float confidence;       // 호환성을 위해 유지
 
-        private BoundingBox bbox;       // 바운딩 박스 (optional)
+        private BoundingBox bbox;       // 바운딩 박스 (구버전)
+
+        @JsonProperty("bbox_xyxy")
+        private List<Float> bboxXyxy;   // 새 버전 바운딩 박스 [x_min, y_min, x_max, y_max]
 
         // score 또는 confidence 중 하나 반환
         public Float getConfidence() {
             return score != null ? score : confidence;
+        }
+
+        // 바운딩 박스 반환 (bbox_xyxy를 BoundingBox로 변환 또는 기존 bbox 사용)
+        public BoundingBox getBbox() {
+            if (bboxXyxy != null && bboxXyxy.size() == 4) {
+                return BoundingBox.builder()
+                    .xMin(bboxXyxy.get(0))
+                    .yMin(bboxXyxy.get(1))
+                    .xMax(bboxXyxy.get(2))
+                    .yMax(bboxXyxy.get(3))
+                    .build();
+            }
+            return bbox;
         }
     }
 
